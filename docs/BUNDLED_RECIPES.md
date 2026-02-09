@@ -118,6 +118,81 @@ Default tool policy:
 - allows web access + file operations
 - denies `exec` (safe-by-default)
 
+## 6) `customer-support-team` (team)
+**Kind:** team
+
+**Use when:** you want a repeatable support workflow: triage → resolution → KB.
+
+Scaffold:
+```bash
+openclaw recipes scaffold-team customer-support-team --team-id customer-support-team-team --apply-config
+```
+
+What it creates:
+- shared workspace conventions:
+  - `work/cases/`, `work/replies/`, `work/kb/`
+- agents:
+  - lead, triage, resolver, kb-writer
+
+Default tool policy:
+- allows web access + file operations
+- denies `exec` (safe-by-default)
+
+## 7) `product-team` (team)
+**Kind:** team
+
+**Use when:** you want a PRD → design → build → QA delivery loop.
+
+Scaffold:
+```bash
+openclaw recipes scaffold-team product-team --team-id product-team-team --apply-config
+```
+
+Notes:
+- The `engineer` role allows `group:runtime` and does **not** deny `exec` so it can run local tooling.
+
+## 8) `researcher` (agent)
+**Kind:** agent
+
+**Use when:** you want a single, citations-first research agent.
+
+Scaffold:
+```bash
+openclaw recipes scaffold researcher --agent-id researcher --apply-config
+```
+
+Default tool policy:
+- allows web access + file operations
+- denies `exec`
+
+## 9) `editor` (agent)
+**Kind:** agent
+
+**Use when:** you want a single editing agent.
+
+Scaffold:
+```bash
+openclaw recipes scaffold editor --agent-id editor --apply-config
+```
+
+Default tool policy:
+- allows web access + file operations
+- denies `exec`
+
+## 10) `developer` (agent)
+**Kind:** agent
+
+**Use when:** you want a single developer agent with runtime tooling.
+
+Scaffold:
+```bash
+openclaw recipes scaffold developer --agent-id dev --apply-config
+```
+
+Default tool policy:
+- allows `group:runtime`
+- does not deny `exec`
+
 ## Copying and modifying bundled recipes
 A good workflow is:
 1) Inspect:
