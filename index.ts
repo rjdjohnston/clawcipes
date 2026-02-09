@@ -520,6 +520,138 @@ const recipesPlugin = {
           });
 
         cmd
+          .command("migrate-team")
+          .description("Migrate a legacy team scaffold into the new workspace-<teamId> layout")
+          .requiredOption("--team-id <teamId>", "Team id (must end with -team)")
+          .option("--mode <mode>", "move|copy", "move")
+          .option("--dry-run", "Print the plan without writing anything", false)
+          .option("--overwrite", "Allow merging into an existing destination (dangerous)", false)
+          .action(async (options: any) => {
+            const teamId = String(options.teamId);
+            if (!teamId.endsWith("-team")) throw new Error("teamId must end with -team");
+
+            const mode = String(options.mode ?? "move");
+            if (mode !== "move" && mode !== "copy") throw new Error("--mode must be move|copy");
+
+            const baseWorkspace = api.config.agents?.defaults?.workspace;
+            if (!baseWorkspace) throw new Error("agents.defaults.workspace is not set in config");
+
+            const legacyTeamDir = path.resolve(baseWorkspace, "teams", teamId);
+            const legacyAgentsDir = path.resolve(baseWorkspace, "agents");
+
+            const destTeamDir = path.resolve(baseWorkspace, "..", `workspace-${teamId}`);
+            const destRolesDir = path.join(destTeamDir, "roles");
+
+            const exists = async (p: string) => fileExists(p);
+
+            // Build migration plan
+            const plan: any = {
+              teamId,
+              mode,
+              legacy: { teamDir: legacyTeamDir, agentsDir: legacyAgentsDir },
+              dest: { teamDir: destTeamDir, rolesDir: destRolesDir },
+              steps: [] as any[],
+              agentIds: [] as string[],
+            };
+
+            const legacyTeamExists = await exists(legacyTeamDir);
+            if (!legacyTeamExists) {
+              throw new Error(`Legacy team directory not found: ${legacyTeamDir}`);
+            }
+
+            const destExists = await exists(destTeamDir);
+            if (destExists && !options.overwrite) {
+              throw new Error(`Destination already exists: ${destTeamDir} (re-run with --overwrite to merge)`);
+            }
+
+            // 1) Move/copy team shared workspace
+            plan.steps.push({ kind: "teamDir", from: legacyTeamDir, to: destTeamDir });
+
+            // 2) Move/copy each role agent directory into roles/<role>/
+            const legacyAgentsExist = await exists(legacyAgentsDir);
+            let legacyAgentFolders: string[] = [];
+            if (legacyAgentsExist) {
+              legacyAgentFolders = (await fs.readdir(legacyAgentsDir)).filter((x) => x.startsWith(`${teamId}-`));
+            }
+
+            for (const folder of legacyAgentFolders) {
+              const agentId = folder;
+              const role = folder.slice((teamId + "-").length);
+              const from = path.join(legacyAgentsDir, folder);
+              const to = path.join(destRolesDir, role);
+              plan.agentIds.push(agentId);
+              plan.steps.push({ kind: "roleDir", agentId, role, from, to });
+            }
+
+            const dryRun = !!options.dryRun;
+            if (dryRun) {
+              console.log(JSON.stringify({ ok: true, dryRun: true, plan }, null, 2));
+              return;
+            }
+
+            // Helpers
+            const copyDirRecursive = async (src: string, dst: string) => {
+              await ensureDir(dst);
+              const entries = await fs.readdir(src, { withFileTypes: true });
+              for (const ent of entries) {
+                const s = path.join(src, ent.name);
+                const d = path.join(dst, ent.name);
+                if (ent.isDirectory()) await copyDirRecursive(s, d);
+                else if (ent.isSymbolicLink()) {
+                  const link = await fs.readlink(s);
+                  await fs.symlink(link, d);
+                } else {
+                  await ensureDir(path.dirname(d));
+                  await fs.copyFile(s, d);
+                }
+              }
+            };
+
+            const removeDirRecursive = async (p: string) => {
+              // node 25 supports fs.rm
+              await fs.rm(p, { recursive: true, force: true });
+            };
+
+            const moveDir = async (src: string, dst: string) => {
+              await ensureDir(path.dirname(dst));
+              try {
+                await fs.rename(src, dst);
+              } catch {
+                // cross-device or existing: fallback to copy+remove
+                await copyDirRecursive(src, dst);
+                await removeDirRecursive(src);
+              }
+            };
+
+            // Execute plan
+            if (mode === "copy") {
+              await copyDirRecursive(legacyTeamDir, destTeamDir);
+            } else {
+              await moveDir(legacyTeamDir, destTeamDir);
+            }
+
+            // Ensure roles dir exists
+            await ensureDir(destRolesDir);
+
+            for (const step of plan.steps.filter((s: any) => s.kind === "roleDir")) {
+              if (!(await exists(step.from))) continue;
+              if (mode === "copy") await copyDirRecursive(step.from, step.to);
+              else await moveDir(step.from, step.to);
+            }
+
+            // Update config: set each team agent's workspace to destTeamDir (shared)
+            const agentSnippets: AgentConfigSnippet[] = plan.agentIds.map((agentId: string) => ({
+              id: agentId,
+              workspace: destTeamDir,
+            }));
+            if (agentSnippets.length) {
+              await applyAgentSnippetsToOpenClawConfig(api, agentSnippets);
+            }
+
+            console.log(JSON.stringify({ ok: true, migrated: teamId, destTeamDir, agentIds: plan.agentIds }, null, 2));
+          });
+
+        cmd
           .command("install")
           .description("Install a ClawHub skill into this OpenClaw workspace (confirmation-gated)")
           .argument("<idOrSlug>", "Recipe id OR ClawHub skill slug")
