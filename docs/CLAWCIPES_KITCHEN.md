@@ -2,8 +2,6 @@
 
 Clawcipes Kitchen is our UI for managing Clawcipes workflows.
 
-> Name note: this UI was previously referred to as “Mission Control”. The product/UI name going forward is **Clawcipes Kitchen**.
-
 ## What it’s for
 - Activity feed (high-level semantic events)
 - Weekly scheduled-task view
