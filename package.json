@@ -1,11 +1,13 @@
 {
   "name": "@clawcipes/recipes",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Clawcipes recipes plugin for OpenClaw (markdown recipes -> scaffold agents/teams)",
   "main": "index.ts",
   "type": "commonjs",
   "openclaw": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
   },
   "publishConfig": {
     "access": "public"
@@ -21,7 +23,12 @@
   "scripts": {
     "test": "echo \"(no tests yet)\""
   },
-  "keywords": ["openclaw", "clawcipes", "plugin", "recipes"],
+  "keywords": [
+    "openclaw",
+    "clawcipes",
+    "plugin",
+    "recipes"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
