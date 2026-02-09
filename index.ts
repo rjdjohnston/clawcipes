@@ -183,7 +183,8 @@ type AgentConfigSnippet = {
 type BindingMatch = {
   channel: string;
   accountId?: string;
-  peer?: { kind: "direct" | "group"; id: string };
+  // OpenClaw config schema uses: dm | group | channel
+  peer?: { kind: "dm" | "group" | "channel"; id: string };
   guildId?: string;
   teamId?: string;
 };
@@ -471,8 +472,8 @@ const recipesPlugin = {
           .requiredOption("--agent-id <agentId>", "Target agent id")
           .requiredOption("--channel <channel>", "Channel name (telegram|whatsapp|discord|slack|...) ")
           .option("--account-id <accountId>", "Channel accountId (if applicable)")
-          .option("--peer-kind <kind>", "Peer kind (direct|group)")
-          .option("--peer-id <id>", "Peer id (DM number/id or group id)")
+          .option("--peer-kind <kind>", "Peer kind (dm|group|channel) (aliases: direct->dm)")
+          .option("--peer-id <id>", "Peer id (DM number/id, group id, or channel id)")
           .option("--guild-id <guildId>", "Discord guildId")
           .option("--team-id <teamId>", "Slack teamId")
           .option("--match <json>", "Full match object as JSON/JSON5 (overrides flags)")
@@ -494,9 +495,11 @@ const recipesPlugin = {
                 if (!options.peerKind || !options.peerId) {
                   throw new Error("--peer-kind and --peer-id must be provided together");
                 }
-                const kind = String(options.peerKind);
-                if (kind !== "direct" && kind !== "group") {
-                  throw new Error("--peer-kind must be direct|group");
+                let kind = String(options.peerKind);
+                // Back-compat alias
+                if (kind === "direct") kind = "dm";
+                if (kind !== "dm" && kind !== "group" && kind !== "channel") {
+                  throw new Error("--peer-kind must be dm|group|channel (or direct as alias for dm)");
                 }
                 match.peer = { kind, id: String(options.peerId) };
               }
