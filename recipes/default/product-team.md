@@ -153,12 +153,96 @@ templates:
       - edge cases
       - regression checklist
 
+  lead.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for lead (paths, conventions, env quirks).
+
+  lead.status: |
+    # STATUS.md
+
+    - (empty)
+
+  lead.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  pm.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for pm (paths, conventions, env quirks).
+
+  pm.status: |
+    # STATUS.md
+
+    - (empty)
+
+  pm.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  designer.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for designer (paths, conventions, env quirks).
+
+  designer.status: |
+    # STATUS.md
+
+    - (empty)
+
+  designer.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  engineer.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for engineer (paths, conventions, env quirks).
+
+  engineer.status: |
+    # STATUS.md
+
+    - (empty)
+
+  engineer.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  qa.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for qa (paths, conventions, env quirks).
+
+  qa.status: |
+    # STATUS.md
+
+    - (empty)
+
+  qa.notes: |
+    # NOTES.md
+
+    - (empty)
+
 files:
   - path: SOUL.md
     template: soul
     mode: createOnly
   - path: AGENTS.md
     template: agents
+    mode: createOnly
+  - path: TOOLS.md
+    template: tools
+    mode: createOnly
+  - path: STATUS.md
+    template: status
+    mode: createOnly
+  - path: NOTES.md
+    template: notes
     mode: createOnly
 
 tools:

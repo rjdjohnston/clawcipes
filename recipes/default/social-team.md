@@ -89,12 +89,22 @@ templates:
     - Edited drafts go in `work/edited/`.
     - Provide a short changelog at the top.
 
+
 files:
   - path: SOUL.md
     template: soul
     mode: createOnly
   - path: AGENTS.md
     template: agents
+    mode: createOnly
+  - path: TOOLS.md
+    template: tools
+    mode: createOnly
+  - path: STATUS.md
+    template: status
+    mode: createOnly
+  - path: NOTES.md
+    template: notes
     mode: createOnly
 
 tools:

@@ -130,12 +130,66 @@ templates:
        - How to verify
        - Rollback notes (if applicable)
 
+  lead.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for lead (paths, conventions, env quirks).
+
+  lead.status: |
+    # STATUS.md
+
+    - (empty)
+
+  lead.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  dev.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for dev (paths, conventions, env quirks).
+
+  dev.status: |
+    # STATUS.md
+
+    - (empty)
+
+  dev.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  devops.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for devops (paths, conventions, env quirks).
+
+  devops.status: |
+    # STATUS.md
+
+    - (empty)
+
+  devops.notes: |
+    # NOTES.md
+
+    - (empty)
+
 files:
   - path: SOUL.md
     template: soul
     mode: createOnly
   - path: AGENTS.md
     template: agents
+    mode: createOnly
+  - path: TOOLS.md
+    template: tools
+    mode: createOnly
+  - path: STATUS.md
+    template: status
+    mode: createOnly
+  - path: NOTES.md
+    template: notes
     mode: createOnly
 
 tools:

@@ -120,12 +120,81 @@ templates:
     - Provide a short changelog at the top.
     - Flag any factual claims that need citations.
 
+  lead.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for lead (paths, conventions, env quirks).
+
+  lead.status: |
+    # STATUS.md
+
+    - (empty)
+
+  lead.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  outliner.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for outliner (paths, conventions, env quirks).
+
+  outliner.status: |
+    # STATUS.md
+
+    - (empty)
+
+  outliner.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  writer.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for writer (paths, conventions, env quirks).
+
+  writer.status: |
+    # STATUS.md
+
+    - (empty)
+
+  writer.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  editor.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for editor (paths, conventions, env quirks).
+
+  editor.status: |
+    # STATUS.md
+
+    - (empty)
+
+  editor.notes: |
+    # NOTES.md
+
+    - (empty)
+
 files:
   - path: SOUL.md
     template: soul
     mode: createOnly
   - path: AGENTS.md
     template: agents
+    mode: createOnly
+  - path: TOOLS.md
+    template: tools
+    mode: createOnly
+  - path: STATUS.md
+    template: status
+    mode: createOnly
+  - path: NOTES.md
+    template: notes
     mode: createOnly
 
 tools:

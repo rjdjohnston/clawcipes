@@ -32,12 +32,36 @@ templates:
     - is each section doing one job?
     - are there any claims that need a link/citation?
 
+  tools: |
+    # TOOLS.md
+
+    # Agent-local notes (paths, conventions, env quirks).
+
+  status: |
+    # STATUS.md
+
+    - (empty)
+
+  notes: |
+    # NOTES.md
+
+    - (empty)
+
 files:
   - path: SOUL.md
     template: soul
     mode: createOnly
   - path: AGENTS.md
     template: agents
+    mode: createOnly
+  - path: TOOLS.md
+    template: tools
+    mode: createOnly
+  - path: STATUS.md
+    template: status
+    mode: createOnly
+  - path: NOTES.md
+    template: notes
     mode: createOnly
 
 tools:

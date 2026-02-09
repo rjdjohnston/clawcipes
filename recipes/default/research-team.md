@@ -136,12 +136,81 @@ templates:
       - Risks/unknowns
       - Links (source list)
 
+  lead.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for lead (paths, conventions, env quirks).
+
+  lead.status: |
+    # STATUS.md
+
+    - (empty)
+
+  lead.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  researcher.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for researcher (paths, conventions, env quirks).
+
+  researcher.status: |
+    # STATUS.md
+
+    - (empty)
+
+  researcher.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  fact-checker.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for fact-checker (paths, conventions, env quirks).
+
+  fact-checker.status: |
+    # STATUS.md
+
+    - (empty)
+
+  fact-checker.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  summarizer.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for summarizer (paths, conventions, env quirks).
+
+  summarizer.status: |
+    # STATUS.md
+
+    - (empty)
+
+  summarizer.notes: |
+    # NOTES.md
+
+    - (empty)
+
 files:
   - path: SOUL.md
     template: soul
     mode: createOnly
   - path: AGENTS.md
     template: agents
+    mode: createOnly
+  - path: TOOLS.md
+    template: tools
+    mode: createOnly
+  - path: STATUS.md
+    template: status
+    mode: createOnly
+  - path: NOTES.md
+    template: notes
     mode: createOnly
 
 tools:

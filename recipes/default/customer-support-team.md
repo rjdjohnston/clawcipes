@@ -137,12 +137,81 @@ templates:
       - resolution steps
       - prevention / follow-ups
 
+  lead.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for lead (paths, conventions, env quirks).
+
+  lead.status: |
+    # STATUS.md
+
+    - (empty)
+
+  lead.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  triage.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for triage (paths, conventions, env quirks).
+
+  triage.status: |
+    # STATUS.md
+
+    - (empty)
+
+  triage.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  resolver.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for resolver (paths, conventions, env quirks).
+
+  resolver.status: |
+    # STATUS.md
+
+    - (empty)
+
+  resolver.notes: |
+    # NOTES.md
+
+    - (empty)
+
+  kb-writer.tools: |
+    # TOOLS.md
+
+    # Agent-local notes for kb-writer (paths, conventions, env quirks).
+
+  kb-writer.status: |
+    # STATUS.md
+
+    - (empty)
+
+  kb-writer.notes: |
+    # NOTES.md
+
+    - (empty)
+
 files:
   - path: SOUL.md
     template: soul
     mode: createOnly
   - path: AGENTS.md
     template: agents
+    mode: createOnly
+  - path: TOOLS.md
+    template: tools
+    mode: createOnly
+  - path: STATUS.md
+    template: status
+    mode: createOnly
+  - path: NOTES.md
+    template: notes
     mode: createOnly
 
 tools:
