@@ -7,6 +7,17 @@
   "openclaw": {
     "extensions": ["./index.ts"]
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "index.ts",
+    "openclaw.plugin.json",
+    "recipes/",
+    "docs/",
+    "clawcipes_cook.jpg",
+    "README.md"
+  ],
   "scripts": {
     "test": "echo \"(no tests yet)\""
   },
