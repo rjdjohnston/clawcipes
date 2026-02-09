@@ -9,18 +9,23 @@ This repo is an **OpenClaw plugin** (not a standalone CLI). OpenClaw loads it an
 - Node.js available (OpenClaw uses Node to load plugins)
 - (For `recipes install`) you’ll need access to ClawHub (the command runs `npx clawhub@latest ...`).
 
-## Install (local dev path)
-This is the recommended workflow while developing.
-
-1) Clone or place this repo at:
-- `~/Sites/clawcipes`
-
-2) Install the plugin into OpenClaw via a local path:
+## Install
+### Option A: clone from GitHub
 ```bash
+git clone https://github.com/rjdjohnston/clawcipes.git ~/Sites/clawcipes
 openclaw plugins install -l ~/Sites/clawcipes
+openclaw gateway restart
+openclaw plugins list
 ```
 
-3) Confirm it loaded:
+### Option B: local dev path (already cloned)
+```bash
+openclaw plugins install -l ~/Sites/clawcipes
+openclaw gateway restart
+openclaw plugins list
+```
+
+Confirm it loaded:
 ```bash
 openclaw plugins list
 # look for id: recipes

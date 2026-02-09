@@ -5,7 +5,16 @@ Clawcipes is an OpenClaw plugin that provides **CLI-first recipes** for scaffold
 If you like durable workflows: Clawcipes is built around a **file-first team workspace** (inbox/backlog/in-progress/done) that plays nicely with git.
 
 ## Quickstart
-### 1) Install (local dev)
+### 1) Install
+#### Option A: clone from GitHub
+```bash
+git clone https://github.com/rjdjohnston/clawcipes.git ~/Sites/clawcipes
+openclaw plugins install -l ~/Sites/clawcipes
+openclaw gateway restart
+openclaw plugins list
+```
+
+#### Option B: local dev path (already cloned)
 ```bash
 openclaw plugins install -l ~/Sites/clawcipes
 openclaw gateway restart
