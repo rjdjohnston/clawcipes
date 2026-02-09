@@ -200,8 +200,46 @@ function upsertAgentInConfig(cfgObj: any, snippet: AgentConfigSnippet) {
     tools: snippet.tools ? { ...snippet.tools } : prev?.tools,
   };
 
-  if (idx >= 0) list[idx] = nextAgent;
-  else list.push(nextAgent);
+  if (idx >= 0) {
+    list[idx] = nextAgent;
+    return;
+  }
+
+  // New agent: append to end of list.
+  // (We still separately enforce that main exists and stays first/default.)
+  list.push(nextAgent);
+}
+
+function ensureMainFirstInAgentsList(cfgObj: any, api: OpenClawPluginApi) {
+  if (!cfgObj.agents) cfgObj.agents = {};
+  if (!Array.isArray(cfgObj.agents.list)) cfgObj.agents.list = [];
+
+  const list: any[] = cfgObj.agents.list;
+
+  const workspaceRoot =
+    cfgObj.agents?.defaults?.workspace ??
+    api.config.agents?.defaults?.workspace ??
+    "~/.openclaw/workspace";
+
+  const idx = list.findIndex((a) => a?.id === "main");
+  const prevMain = idx >= 0 ? list[idx] : {};
+
+  // Enforce: main exists, is first, and is the default.
+  const main = {
+    ...prevMain,
+    id: "main",
+    default: true,
+    workspace: prevMain?.workspace ?? workspaceRoot,
+    sandbox: prevMain?.sandbox ?? { mode: "off" },
+  };
+
+  // Ensure only one default.
+  for (const a of list) {
+    if (a?.id !== "main" && a?.default) a.default = false;
+  }
+
+  if (idx >= 0) list.splice(idx, 1);
+  list.unshift(main);
 }
 
 async function applyAgentSnippetsToOpenClawConfig(api: OpenClawPluginApi, snippets: AgentConfigSnippet[]) {
@@ -211,7 +249,14 @@ async function applyAgentSnippetsToOpenClawConfig(api: OpenClawPluginApi, snippe
 
   // Some loaders return { cfg, ... }. If so, normalize.
   const cfgObj = (current.cfg ?? current) as any;
+
+  // Always keep main first/default when multi-agent workflows are in play.
+  ensureMainFirstInAgentsList(cfgObj, api);
+
   for (const s of snippets) upsertAgentInConfig(cfgObj, s);
+
+  // Re-assert ordering/default after upserts.
+  ensureMainFirstInAgentsList(cfgObj, api);
 
   await (api.runtime as any).config?.writeConfigFile?.(cfgObj);
   return { updatedAgents: snippets.map((s) => s.id) };
@@ -269,6 +314,27 @@ const recipesPlugin = {
     properties: {},
   },
   register(api: OpenClawPluginApi) {
+    // On plugin load, ensure multi-agent config has an explicit agents.list with main at top.
+    // This is idempotent and only writes if a change is required.
+    (async () => {
+      try {
+        const current = (api.runtime as any).config?.loadConfig?.();
+        if (!current) return;
+        const cfgObj = (current.cfg ?? current) as any;
+
+        const before = JSON.stringify(cfgObj.agents?.list ?? null);
+        ensureMainFirstInAgentsList(cfgObj, api);
+        const after = JSON.stringify(cfgObj.agents?.list ?? null);
+
+        if (before !== after) {
+          await (api.runtime as any).config?.writeConfigFile?.(cfgObj);
+          console.error("[recipes] ensured agents.list includes main as first/default");
+        }
+      } catch (e) {
+        console.error(`[recipes] warning: failed to ensure main agent in agents.list: ${(e as Error).message}`);
+      }
+    })();
+
     api.registerCli(
       ({ program }) => {
         const cmd = program.command("recipes").description("Manage markdown recipes (scaffold agents/teams)");
