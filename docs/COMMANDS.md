@@ -45,6 +45,13 @@ Options:
 - `--apply-config` (write/update `agents.list[]` in OpenClaw config)
 
 ## `scaffold-team <recipeId>`
+
+### Cron installation config
+If a recipe declares `cronJobs`, scaffold will reconcile those jobs using the plugin config key:
+- `plugins.entries.recipes.config.cronInstallation`: `off | prompt | on`
+  - `off`: never install/reconcile
+  - `prompt` (default): prompt each run (default answer is **No**)
+  - `on`: install/reconcile; new jobs follow `enabledByDefault`
 Scaffold a shared **team workspace** + multiple agents from a **team** recipe.
 
 ```bash
