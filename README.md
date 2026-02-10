@@ -8,7 +8,7 @@
 
 Clawcipes is an OpenClaw plugin that provides **CLI-first recipes** for scaffolding specialist agents and teams from Markdown.
 
-If you like durable workflows: Clawcipes is built around a **file-first team workspace** (inbox/backlog/in-progress/done) that plays nicely with git.
+If you like durable workflows: Clawcipes is built around a **file-first team workspace** (inbox/backlog/in-progress/testing/done) that plays nicely with git.
 
 ## Quickstart
 ### 1) Install
@@ -57,6 +57,7 @@ openclaw recipes dispatch \
 - `openclaw recipes install <idOrSlug> [--yes] [--global|--agent-id <id>|--team-id <id>]` (skills: global or scoped)
 - `openclaw recipes bind|unbind|bindings` (multi-agent routing)
 - `openclaw recipes dispatch ...` (request → inbox + ticket + assignment)
+- `openclaw recipes tickets|move-ticket|assign|take|complete` (file-first ticket workflow)
 
 For full details, see `docs/COMMANDS.md`.
 
@@ -127,4 +128,4 @@ Clawcipes is meant to be *installed* and then used to build **agents + teams**.
 Most users should focus on:
 - authoring recipes in their OpenClaw workspace (`<workspace>/recipes/*.md`)
 - scaffolding teams (`openclaw recipes scaffold-team ...`)
-- running the file-first workflow (dispatch → backlog → in-progress → done)
+- running the file-first workflow (dispatch → backlog → in-progress → testing → done)

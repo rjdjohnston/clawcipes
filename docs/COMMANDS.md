@@ -66,7 +66,7 @@ Creates a shared team workspace root:
 
 Standard folders:
 - `inbox/`, `outbox/`, `shared/`, `notes/`
-- `work/{backlog,in-progress,done,assignments}`
+- `work/{backlog,in-progress,testing,done,assignments}`
 - `roles/<role>/...` (role-specific recipe files)
 
 Also creates agent config entries under `agents.list[]` (when `--apply-config`), with agent ids:
@@ -150,6 +150,53 @@ Options:
 ## `dispatch`
 Convert a natural-language request into file-first execution artifacts.
 
+## `tickets`
+List tickets for a team across the standard workflow stages.
+
+```bash
+openclaw recipes tickets --team-id <teamId>
+openclaw recipes tickets --team-id <teamId> --json
+```
+
+## `move-ticket`
+Move a ticket file between workflow stages and update the ticket’s `Status:` field.
+
+```bash
+openclaw recipes move-ticket --team-id <teamId> --ticket 0007 --to in-progress
+openclaw recipes move-ticket --team-id <teamId> --ticket 0007 --to testing
+openclaw recipes move-ticket --team-id <teamId> --ticket 0007 --to done --completed
+```
+
+Stages:
+- `backlog` → `Status: queued`
+- `in-progress` → `Status: in-progress`
+- `testing` → `Status: testing`
+- `done` → `Status: done` (optional `Completed:` timestamp)
+
+## `assign`
+Assign a ticket to an owner (updates `Owner:` and creates an assignment stub).
+
+```bash
+openclaw recipes assign --team-id <teamId> --ticket 0007 --owner dev
+openclaw recipes assign --team-id <teamId> --ticket 0007 --owner lead
+```
+
+Owners (current): `dev|devops|lead`.
+
+## `take`
+Shortcut: assign + move to in-progress.
+
+```bash
+openclaw recipes take --team-id <teamId> --ticket 0007 --owner dev
+```
+
+## `complete`
+Shortcut: move to done + ensure `Status: done` + add `Completed:` timestamp.
+
+```bash
+openclaw recipes complete --team-id <teamId> --ticket 0007
+```
+
 ```bash
 openclaw recipes dispatch \
   --team-id development-team-team \
@@ -164,12 +211,12 @@ Options:
 - `--yes` (skip review prompt)
 
 Creates (createOnly):
-- `teams/<teamId>/inbox/<timestamp>-<slug>.md`
-- `teams/<teamId>/work/backlog/<NNNN>-<slug>.md`
-- `teams/<teamId>/work/assignments/<NNNN>-assigned-<owner>.md`
+- `workspace-<teamId>/inbox/<timestamp>-<slug>.md`
+- `workspace-<teamId>/work/backlog/<NNNN>-<slug>.md`
+- `workspace-<teamId>/work/assignments/<NNNN>-assigned-<owner>.md`
 
 Ticket numbering:
-- Scans `work/backlog`, `work/in-progress`, `work/done` and uses max+1.
+- Scans `work/backlog`, `work/in-progress`, `work/testing`, `work/done` and uses max+1.
 
 Review-before-write:
 - Prints a JSON plan and asks for confirmation unless `--yes`.

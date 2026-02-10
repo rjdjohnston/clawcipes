@@ -6,7 +6,7 @@ Clawcipes’ differentiator is the **shared team workspace** + a simple, durable
 When you scaffold a team:
 
 ```
-teams/<teamId>/
+~/.openclaw/workspace-<teamId>/
   inbox/
   outbox/
   shared/
@@ -14,9 +14,9 @@ teams/<teamId>/
   work/
     backlog/
     in-progress/
+    testing/
     done/
     assignments/
-  TICKETS.md
   TEAM.md
 ```
 
@@ -29,12 +29,16 @@ teams/<teamId>/
 - Filename ordering is the priority queue.
 
 3) **Execute**
-- Move ticket file to `work/in-progress/`.
+- Move ticket file to `work/in-progress/` (or use `take`).
 - Do work; write artifacts into `shared/` or agent workspaces.
 
-4) **Complete**
-- Move ticket to `work/done/`.
-- Add a `*.DONE.md` report next to it.
+4) **Test**
+- Move ticket to `work/testing/`.
+- Optionally assign to a tester/lead for verification.
+
+5) **Complete**
+- Move ticket to `work/done/` (or use `complete`).
+- Add `Completed:` timestamp (automated by `complete` or `move-ticket --completed`).
 
 ## Dispatcher command
 The lead can convert a natural-language request into artifacts with:
