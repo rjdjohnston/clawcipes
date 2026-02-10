@@ -51,6 +51,32 @@ templates:
     Team: {{teamId}}
     Shared workspace: {{teamDir}}
 
+    ## Guardrails (read → act → write)
+
+    Before you act:
+    1) Read:
+       - `notes/plan.md`
+       - `notes/status.md`
+       - `shared-context/priorities.md`
+       - the relevant ticket(s)
+
+    After you act:
+    1) Write back:
+       - Update tickets with decisions/assignments.
+       - Keep `notes/status.md` current (3–5 bullets per active ticket).
+
+    ## Curator model
+
+    You are the curator of:
+    - `notes/plan.md`
+    - `shared-context/priorities.md`
+
+    Everyone else should append to:
+    - `shared-context/agent-outputs/` (append-only)
+    - `shared-context/feedback/`
+
+    Your job is to periodically distill those inputs into the curated files.
+
     ## File-first workflow (tickets)
 
     Source of truth is the shared team workspace.
@@ -61,8 +87,9 @@ templates:
     - `work/in-progress/` — tickets currently being executed
     - `work/testing/` — tickets awaiting QA verification
     - `work/done/` — completed tickets + completion notes
-    - `notes/plan.md` — current plan / priorities
+    - `notes/plan.md` — current plan / priorities (curated)
     - `notes/status.md` — current status snapshot
+    - `shared-context/` — shared context + append-only outputs
 
     ### Ticket numbering (critical)
     - Backlog tickets MUST be named `0001-...md`, `0002-...md`, etc.
@@ -78,7 +105,8 @@ templates:
 
     ### Your responsibilities
     - For every new request in `inbox/`, create a normalized ticket in `work/backlog/`.
-    - Update `notes/plan.md` and `notes/status.md`.
+    - Curate `notes/plan.md` and `shared-context/priorities.md`.
+    - Keep `notes/status.md` updated.
     - When work is ready for QA, move the ticket to `work/testing/` and assign it to the tester.
     - Only after QA verification, move the ticket to `work/done/` (or use `openclaw recipes complete`).
     - When a completion appears in `work/done/`, write a short summary into `outbox/`.
@@ -93,6 +121,29 @@ templates:
     # AGENTS.md
 
     Shared workspace: {{teamDir}}
+
+    ## Guardrails (read → act → write)
+
+    Before you change anything:
+    1) Read:
+       - `notes/plan.md`
+       - `notes/status.md`
+       - `shared-context/priorities.md`
+       - the current ticket you’re working on
+
+    While working:
+    - Keep changes small and safe.
+    - Prefer file-first coordination over chat.
+
+    After you finish a work session (even if not done):
+    1) Write back:
+       - Update the ticket with what you did and what’s next.
+       - Add **3–5 bullets** to `notes/status.md` (what changed / what’s blocked).
+       - Append detailed output to `shared-context/agent-outputs/` (append-only).
+
+    Curator model:
+    - Lead curates `notes/plan.md` and `shared-context/priorities.md`.
+    - You should NOT edit curated files; propose changes via `agent-outputs/`.
 
     ## How you work (pull system)
 
@@ -121,6 +172,25 @@ templates:
     # AGENTS.md
 
     Shared workspace: {{teamDir}}
+
+    ## Guardrails (read → act → write)
+
+    Before you change anything:
+    1) Read:
+       - `notes/plan.md`
+       - `notes/status.md`
+       - `shared-context/priorities.md`
+       - the current ticket you’re working on
+
+    After you finish a work session:
+    1) Write back:
+       - Update the ticket with what you did + verification steps.
+       - Add **3–5 bullets** to `notes/status.md`.
+       - Append detailed output/logs to `shared-context/agent-outputs/` (append-only).
+
+    Curator model:
+    - Lead curates `notes/plan.md` and `shared-context/priorities.md`.
+    - You should NOT edit curated files; propose changes via `agent-outputs/`.
 
     ## How you work (pull system)
 
@@ -198,6 +268,25 @@ templates:
     # AGENTS.md
 
     Shared workspace: {{teamDir}}
+
+    ## Guardrails (read → act → write)
+
+    Before verifying:
+    1) Read:
+       - `notes/plan.md`
+       - `notes/status.md`
+       - `shared-context/priorities.md`
+       - the ticket under test
+
+    After each verification pass:
+    1) Write back:
+       - Add a short verification note to the ticket (pass/fail + evidence).
+       - Add **3–5 bullets** to `notes/status.md` (what’s verified / what’s blocked).
+       - Append detailed findings to `shared-context/feedback/` or `shared-context/agent-outputs/`.
+
+    Curator model:
+    - Lead curates `notes/plan.md` and `shared-context/priorities.md`.
+    - You should NOT edit curated files; propose changes via feedback/outputs.
 
     ## How you work
 
