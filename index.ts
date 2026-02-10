@@ -144,10 +144,10 @@ function skillInstallCommands(cfg: Required<RecipesConfig>, skills: string[]) {
   return lines;
 }
 
-async function detectMissingSkills(api: OpenClawPluginApi, cfg: Required<RecipesConfig>, skills: string[]) {
+async function detectMissingSkills(installDir: string, skills: string[]) {
   const missing: string[] = [];
   for (const s of skills) {
-    const p = workspacePath(api, cfg.workspaceSkillsDir, s);
+    const p = path.join(installDir, s);
     if (!(await fileExists(p))) missing.push(s);
   }
   return missing;
@@ -454,7 +454,10 @@ const recipesPlugin = {
               const { frontmatter } = parseFrontmatter(md);
               if (id && frontmatter.id !== id) continue;
               const req = frontmatter.requiredSkills ?? [];
-              const missing = await detectMissingSkills(api, cfg, req);
+              const workspaceRoot = api.config.agents?.defaults?.workspace;
+              if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
+              const installDir = path.join(workspaceRoot, cfg.workspaceSkillsDir);
+              const missing = await detectMissingSkills(installDir, req);
               out.push({
                 id: frontmatter.id,
                 requiredSkills: req,
@@ -656,9 +659,14 @@ const recipesPlugin = {
 
         cmd
           .command("install")
-          .description("Install a ClawHub skill into this OpenClaw workspace (confirmation-gated)")
+          .description(
+            "Install a skill from ClawHub (confirmation-gated). Default: global (~/.openclaw/skills). Use --agent-id or --team-id for scoped installs.",
+          )
           .argument("<idOrSlug>", "Recipe id OR ClawHub skill slug")
           .option("--yes", "Skip confirmation prompt")
+          .option("--global", "Install into global shared skills (~/.openclaw/skills) (default when no scope flags)")
+          .option("--agent-id <agentId>", "Install into a specific agent workspace (workspace-<agentId>)")
+          .option("--team-id <teamId>", "Install into a team workspace (workspace-<teamId>)")
           .action(async (idOrSlug: string, options: any) => {
             const cfg = getCfg(api);
 
@@ -673,10 +681,45 @@ const recipesPlugin = {
               recipe = null;
             }
 
-            const workspaceRoot = api.config.agents?.defaults?.workspace;
-            if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
+            const baseWorkspace = api.config.agents?.defaults?.workspace;
+            if (!baseWorkspace) throw new Error("agents.defaults.workspace is not set in config");
 
-            const installDir = path.join(workspaceRoot, cfg.workspaceSkillsDir);
+            const stateDir = path.resolve(baseWorkspace, ".."); // ~/.openclaw
+
+            const scopeFlags = [options.global ? "global" : null, options.agentId ? "agent" : null, options.teamId ? "team" : null].filter(Boolean);
+            if (scopeFlags.length > 1) {
+              throw new Error("Use only one of: --global, --agent-id, --team-id");
+            }
+
+            const agentIdOpt = typeof options.agentId === "string" ? options.agentId.trim() : "";
+            const teamIdOpt = typeof options.teamId === "string" ? options.teamId.trim() : "";
+
+            // Default is global install when no scope is provided.
+            const scope = scopeFlags[0] ?? "global";
+
+            let workdir: string;
+            let dirName: string;
+            let installDir: string;
+
+            if (scope === "agent") {
+              if (!agentIdOpt) throw new Error("--agent-id cannot be empty");
+              const agentWorkspace = path.resolve(stateDir, `workspace-${agentIdOpt}`);
+              workdir = agentWorkspace;
+              dirName = cfg.workspaceSkillsDir;
+              installDir = path.join(agentWorkspace, dirName);
+            } else if (scope === "team") {
+              if (!teamIdOpt) throw new Error("--team-id cannot be empty");
+              const teamWorkspace = path.resolve(stateDir, `workspace-${teamIdOpt}`);
+              workdir = teamWorkspace;
+              dirName = cfg.workspaceSkillsDir;
+              installDir = path.join(teamWorkspace, dirName);
+            } else {
+              workdir = stateDir;
+              dirName = "skills";
+              installDir = path.join(stateDir, dirName);
+            }
+
+            await ensureDir(installDir);
 
             const skillsToInstall = recipe
               ? Array.from(new Set([...(recipe.requiredSkills ?? []), ...(recipe.optionalSkills ?? [])])).filter(Boolean)
@@ -687,11 +730,11 @@ const recipesPlugin = {
               return;
             }
 
-            const missing = await detectMissingSkills(api, cfg, skillsToInstall);
+            const missing = await detectMissingSkills(installDir, skillsToInstall);
             const already = skillsToInstall.filter((s) => !missing.includes(s));
 
             if (already.length) {
-              console.error(`Already present in workspace skills dir (${installDir}): ${already.join(", ")}`);
+              console.error(`Already present in skills dir (${installDir}): ${already.join(", ")}`);
             }
 
             if (!missing.length) {
@@ -699,9 +742,10 @@ const recipesPlugin = {
               return;
             }
 
+            const targetLabel = scope === "agent" ? `agent:${agentIdOpt}` : scope === "team" ? `team:${teamIdOpt}` : "global";
             const header = recipe
-              ? `Install skills for recipe ${recipe.id} into ${installDir}?\n- ${missing.join("\n- ")}`
-              : `Install skill into ${installDir}?\n- ${missing.join("\n- ")}`;
+              ? `Install skills for recipe ${recipe.id} into ${installDir} (${targetLabel})?\n- ${missing.join("\n- ")}`
+              : `Install skill into ${installDir} (${targetLabel})?\n- ${missing.join("\n- ")}`;
 
             const requireConfirm = !options.yes;
             if (requireConfirm) {
@@ -727,12 +771,12 @@ const recipesPlugin = {
               console.error(header);
             }
 
-            // Use clawhub CLI. Force workspace-local install path.
+            // Use clawhub CLI. Force install path based on scope.
             const { spawnSync } = await import("node:child_process");
             for (const slug of missing) {
               const res = spawnSync(
                 "npx",
-                ["clawhub@latest", "--workdir", workspaceRoot, "--dir", cfg.workspaceSkillsDir, "install", slug],
+                ["clawhub@latest", "--workdir", workdir, "--dir", dirName, "install", slug],
                 { stdio: "inherit" },
               );
               if (res.status !== 0) {
@@ -912,7 +956,10 @@ const recipesPlugin = {
             }
 
             const cfg = getCfg(api);
-            const missing = await detectMissingSkills(api, cfg, recipe.requiredSkills ?? []);
+            const workspaceRoot = api.config.agents?.defaults?.workspace;
+            if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
+            const installDir = path.join(workspaceRoot, cfg.workspaceSkillsDir);
+            const missing = await detectMissingSkills(installDir, recipe.requiredSkills ?? []);
             if (missing.length) {
               console.error(`Missing skills for recipe ${recipeId}: ${missing.join(", ")}`);
               console.error(`Install commands (workspace-local):\n${skillInstallCommands(cfg, missing).join("\n")}`);
@@ -962,16 +1009,16 @@ const recipesPlugin = {
             }
 
             const cfg = getCfg(api);
-            const missing = await detectMissingSkills(api, cfg, recipe.requiredSkills ?? []);
+            const baseWorkspace = api.config.agents?.defaults?.workspace;
+            if (!baseWorkspace) throw new Error("agents.defaults.workspace is not set in config");
+            const installDir = path.join(baseWorkspace, cfg.workspaceSkillsDir);
+            const missing = await detectMissingSkills(installDir, recipe.requiredSkills ?? []);
             if (missing.length) {
               console.error(`Missing skills for recipe ${recipeId}: ${missing.join(", ")}`);
               console.error(`Install commands (workspace-local):\n${skillInstallCommands(cfg, missing).join("\n")}`);
               process.exitCode = 2;
               return;
             }
-
-            const baseWorkspace = api.config.agents?.defaults?.workspace;
-            if (!baseWorkspace) throw new Error("agents.defaults.workspace is not set in config");
 
             // Team workspace root (shared by all role agents): ~/.openclaw/workspace-<teamId>
             const teamDir = path.resolve(baseWorkspace, "..", `workspace-${teamId}`);
