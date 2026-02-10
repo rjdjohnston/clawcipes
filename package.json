@@ -1,6 +1,6 @@
 {
   "name": "@clawcipes/recipes",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Clawcipes recipes plugin for OpenClaw (markdown recipes -> scaffold agents/teams)",
   "main": "index.ts",
   "type": "commonjs",
