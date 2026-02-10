@@ -45,11 +45,11 @@ Options:
 - `--apply-config` (write/update `agents.list[]` in OpenClaw config)
 
 ## `scaffold-team <recipeId>`
-Scaffold a team workspace + multiple agents from a **team** recipe.
+Scaffold a shared **team workspace** + multiple agents from a **team** recipe.
 
 ```bash
 openclaw recipes scaffold-team development-team \
-  --team-id development-team \
+  --team-id development-team-team \
   --overwrite \
   --apply-config
 ```
@@ -60,35 +60,86 @@ Options:
 - `--overwrite`
 - `--apply-config`
 
-Creates a team directory with standard subfolders:
-- `teams/<teamId>/{shared,inbox,outbox,notes,work}`
-- `teams/<teamId>/work/{backlog,in-progress,done,assignments}`
+Creates a shared team workspace root:
 
-Also creates agent workspaces under:
-- `agents/<teamId>-<role>/...`
+- `~/.openclaw/workspace-<teamId>/...`
+
+Standard folders:
+- `inbox/`, `outbox/`, `shared/`, `notes/`
+- `work/{backlog,in-progress,done,assignments}`
+- `roles/<role>/...` (role-specific recipe files)
+
+Also creates agent config entries under `agents.list[]` (when `--apply-config`), with agent ids:
+- `<teamId>-<role>`
 
 ## `install <idOrSlug> [--yes]`
-Install skills into the **workspace-local** skills directory.
+Install skills from ClawHub (confirmation-gated).
+
+Default behavior: **global install** into `~/.openclaw/skills`.
 
 ```bash
-openclaw recipes install local-places
-openclaw recipes install local-places --yes
+# Global (shared across all agents)
+openclaw recipes install agentchat --yes
+
+# Agent-scoped (into workspace-<agentId>/skills)
+openclaw recipes install agentchat --yes --agent-id dev
+
+# Team-scoped (into workspace-<teamId>/skills)
+openclaw recipes install agentchat --yes --team-id development-team-team
 ```
 
 Behavior:
 - If `idOrSlug` matches a recipe id, installs that recipe’s `requiredSkills` + `optionalSkills`.
 - Otherwise treats it as a ClawHub skill slug.
 - Installs via:
-  - `npx clawhub@latest --workdir <workspaceRoot> --dir skills install <slug>`
+  - `npx clawhub@latest --workdir <targetWorkspace> --dir skills install <slug>` (agent/team)
+  - `npx clawhub@latest --workdir ~/.openclaw --dir skills install <slug>` (global)
 - Confirmation-gated unless `--yes`.
 - In non-interactive mode (no TTY), requires `--yes`.
+
+## `bind`
+Add/update a multi-agent routing binding (writes `bindings[]` in `~/.openclaw/openclaw.json`).
+
+Examples:
+
+```bash
+# Route one Telegram DM to an agent
+openclaw recipes bind --agent-id dev --channel telegram --peer-kind dm --peer-id 6477250615
+
+# Route all Telegram traffic to an agent (broad match)
+openclaw recipes bind --agent-id dev --channel telegram
+```
+
+Notes:
+- `peer.kind` must be one of: `dm|group|channel`.
+- Peer-specific bindings are inserted first (more specific wins).
+
+## `bindings`
+Print the current `bindings[]` from OpenClaw config.
+
+```bash
+openclaw recipes bindings
+```
+
+## `migrate-team`
+Migrate a legacy team scaffold into the new `workspace-<teamId>` layout.
+
+```bash
+openclaw recipes migrate-team --team-id development-team-team --dry-run
+openclaw recipes migrate-team --team-id development-team-team --mode move
+```
+
+Options:
+- `--dry-run`
+- `--mode move|copy`
+- `--overwrite` (merge into existing destination)
 
 ## `dispatch`
 Convert a natural-language request into file-first execution artifacts.
 
 ```bash
 openclaw recipes dispatch \
-  --team-id development-team \
+  --team-id development-team-team \
   --request "Add a customer-support team recipe" \
   --owner lead
 ```

@@ -73,4 +73,8 @@ openclaw gateway restart
 ### `recipes install` fails
 - Run `npx clawhub@latest --help` to confirm the CLI can run.
 - Ensure you are logged into ClawHub if required (`npx clawhub@latest login`).
-- Confirm installs go into the workspace-local skills dir (default `~/.openclaw/workspace/skills`).
+- Confirm the install scope you intended:
+  - global: `~/.openclaw/skills/<skill>`
+  - agent: `~/.openclaw/workspace-<agentId>/skills/<skill>`
+  - team: `~/.openclaw/workspace-<teamId>/skills/<skill>`
+- If you change installs or config, restart: `openclaw gateway restart`.

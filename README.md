@@ -52,9 +52,10 @@ openclaw recipes dispatch \
 
 ## Commands (high level)
 - `openclaw recipes list|show|status`
-- `openclaw recipes scaffold` (agent)
-- `openclaw recipes scaffold-team` (team)
-- `openclaw recipes install <idOrSlug> [--yes]` (workspace-local skill install)
+- `openclaw recipes scaffold` (agent → `workspace-<agentId>`)
+- `openclaw recipes scaffold-team` (team → `workspace-<teamId>` + `roles/<role>/`)
+- `openclaw recipes install <idOrSlug> [--yes] [--global|--agent-id <id>|--team-id <id>]` (skills: global or scoped)
+- `openclaw recipes bind|bindings` (multi-agent routing)
 - `openclaw recipes dispatch ...` (request → inbox + ticket + assignment)
 
 For full details, see `docs/COMMANDS.md`.
@@ -85,7 +86,12 @@ Reference:
 
 (Also see: GitHub repo https://github.com/rjdjohnston/clawcipes)
 ## Notes / principles
-- Workspace-local skills live in `~/.openclaw/workspace/skills` by default.
+- Workspaces:
+  - Standalone agents: `~/.openclaw/workspace-<agentId>/`
+  - Teams: `~/.openclaw/workspace-<teamId>/` with `roles/<role>/...`
+- Skills:
+  - Global (shared): `~/.openclaw/skills/<skill>`
+  - Scoped (agent/team): `~/.openclaw/workspace-*/skills/<skill>`
 - Team IDs end with `-team`; agent IDs are namespaced: `<teamId>-<role>`.
 - Recipe template rendering is intentionally simple: `{{var}}` replacement only.
 
@@ -94,10 +100,9 @@ Clawcipes does not (yet) include a first-class `remove-team` command.
 
 To remove a scaffolded team created with `scaffold-team --apply-config`, do two things:
 
-1) Remove team + agent folders (recommended: send to trash):
+1) Remove the team workspace (recommended: send to trash):
 ```bash
-trash ~/.openclaw/workspace/teams/<teamId>
-trash ~/.openclaw/workspace/agents/<teamId>-*
+trash ~/.openclaw/workspace-<teamId>
 ```
 
 2) Remove the agents from OpenClaw config:
