@@ -85,6 +85,26 @@ For team recipes, file templates are namespaced by role:
 
 If a `files[].template` key does not contain a `.`, Clawcipes prefixes it with `<role>.`.
 
+## Cron jobs (optional)
+Recipes can optionally declare cron jobs to be reconciled during `scaffold` / `scaffold-team`.
+
+```yaml
+cronJobs:
+  - id: daily-review
+    schedule: "0 14 * * 1-5"  # 5-field cron
+    message: "Daily review: summarize inbox + calendar for today."
+    enabledByDefault: false
+    timezone: "America/New_York"   # optional
+    channel: "telegram"            # optional (default: last)
+    to: "<chatId or phone>"        # optional
+    description: "Weekday daily review"
+```
+
+Notes:
+- `cronJobs[].id` must be **stable** within the recipe; it’s used for idempotent updates.
+- Safe default behavior is conservative: when `cronInstallation=prompt`, the prompt default is **No**.
+- When the user opts out, jobs are installed **disabled** (so they can be enabled later).
+
 ## Tool policy
 Recipes can include tool policy, which is written into `agents.list[].tools` when `--apply-config` is used:
 

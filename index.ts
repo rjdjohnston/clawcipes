@@ -1,6 +1,7 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import path from "node:path";
 import fs from "node:fs/promises";
+import crypto from "node:crypto";
 import JSON5 from "json5";
 import YAML from "yaml";
 
@@ -11,6 +12,32 @@ type RecipesConfig = {
   workspaceTeamsDir?: string;
   autoInstallMissingSkills?: boolean;
   confirmAutoInstall?: boolean;
+
+  /** Cron installation behavior during scaffold/scaffold-team. */
+  cronInstallation?: "off" | "prompt" | "on";
+};
+
+type CronJobSpec = {
+  /** Stable id within the recipe (used for idempotent reconciliation). */
+  id: string;
+  /** 5-field cron expression */
+  schedule: string;
+  /** Agent message payload */
+  message: string;
+
+  name?: string;
+  description?: string;
+  timezone?: string;
+
+  /** Delivery routing (optional; defaults to OpenClaw "last"). */
+  channel?: string;
+  to?: string;
+
+  /** Which agent should execute this job (optional). */
+  agentId?: string;
+
+  /** If true, install enabled when cronInstallation=on (or prompt-yes). Default false. */
+  enabledByDefault?: boolean;
 };
 
 type RecipeFrontmatter = {
@@ -19,6 +46,9 @@ type RecipeFrontmatter = {
   version?: string;
   description?: string;
   kind?: "agent" | "team";
+
+  /** Optional recipe-defined cron jobs to reconcile during scaffold. */
+  cronJobs?: CronJobSpec[];
 
   // skill deps (installed into workspace-local skills dir)
   requiredSkills?: string[];
@@ -71,6 +101,7 @@ function getCfg(api: OpenClawPluginApi): Required<RecipesConfig> {
     workspaceTeamsDir: cfg.workspaceTeamsDir ?? "teams",
     autoInstallMissingSkills: cfg.autoInstallMissingSkills ?? false,
     confirmAutoInstall: cfg.confirmAutoInstall ?? true,
+    cronInstallation: cfg.cronInstallation ?? "prompt",
   };
 }
 
@@ -155,6 +186,267 @@ async function detectMissingSkills(installDir: string, skills: string[]) {
 
 async function ensureDir(p: string) {
   await fs.mkdir(p, { recursive: true });
+}
+
+type CronInstallMode = "off" | "prompt" | "on";
+
+type CronMappingStateV1 = {
+  version: 1;
+  entries: Record<
+    string,
+    {
+      installedCronId: string;
+      specHash: string;
+      orphaned?: boolean;
+      updatedAtMs: number;
+    }
+  >;
+};
+
+function cronKey(scope: { kind: "team"; teamId: string; recipeId: string } | { kind: "agent"; agentId: string; recipeId: string }, cronJobId: string) {
+  return scope.kind === "team"
+    ? `team:${scope.teamId}:recipe:${scope.recipeId}:cron:${cronJobId}`
+    : `agent:${scope.agentId}:recipe:${scope.recipeId}:cron:${cronJobId}`;
+}
+
+function hashSpec(spec: unknown) {
+  const json = stableStringify(spec);
+  return crypto.createHash("sha256").update(json, "utf8").digest("hex");
+}
+
+async function readJsonFile<T>(p: string): Promise<T | null> {
+  try {
+    const raw = await fs.readFile(p, "utf8");
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function writeJsonFile(p: string, data: unknown) {
+  await ensureDir(path.dirname(p));
+  await fs.writeFile(p, JSON.stringify(data, null, 2) + "\n", "utf8");
+}
+
+async function loadCronMappingState(statePath: string): Promise<CronMappingStateV1> {
+  const existing = await readJsonFile<CronMappingStateV1>(statePath);
+  if (existing && existing.version === 1 && existing.entries && typeof existing.entries === "object") return existing;
+  return { version: 1, entries: {} };
+}
+
+type OpenClawCronJob = {
+  id: string;
+  name?: string;
+  enabled?: boolean;
+  schedule?: any;
+  payload?: any;
+  delivery?: any;
+  agentId?: string;
+  description?: string;
+};
+
+function spawnOpenClawJson(args: string[]) {
+  const { spawnSync } = require("node:child_process") as typeof import("node:child_process");
+  const res = spawnSync("openclaw", args, { encoding: "utf8" });
+  if (res.status !== 0) {
+    const err = new Error(`openclaw ${args.join(" ")} failed (exit=${res.status})`);
+    (err as any).stdout = res.stdout;
+    (err as any).stderr = res.stderr;
+    throw err;
+  }
+  const out = String(res.stdout ?? "").trim();
+  return out ? (JSON.parse(out) as any) : null;
+}
+
+function normalizeCronJobs(frontmatter: RecipeFrontmatter): CronJobSpec[] {
+  const raw = frontmatter.cronJobs;
+  if (!raw) return [];
+  if (!Array.isArray(raw)) throw new Error("frontmatter.cronJobs must be an array");
+
+  const out: CronJobSpec[] = [];
+  const seen = new Set<string>();
+  for (const j of raw as any[]) {
+    if (!j || typeof j !== "object") throw new Error("cronJobs entries must be objects");
+    const id = String((j as any).id ?? "").trim();
+    if (!id) throw new Error("cronJobs[].id is required");
+    if (seen.has(id)) throw new Error(`Duplicate cronJobs[].id: ${id}`);
+    seen.add(id);
+
+    const schedule = String((j as any).schedule ?? "").trim();
+    const message = String((j as any).message ?? (j as any).task ?? (j as any).prompt ?? "").trim();
+    if (!schedule) throw new Error(`cronJobs[${id}].schedule is required`);
+    if (!message) throw new Error(`cronJobs[${id}].message is required`);
+
+    out.push({
+      id,
+      schedule,
+      message,
+      name: (j as any).name ? String((j as any).name) : undefined,
+      description: (j as any).description ? String((j as any).description) : undefined,
+      timezone: (j as any).timezone ? String((j as any).timezone) : undefined,
+      channel: (j as any).channel ? String((j as any).channel) : undefined,
+      to: (j as any).to ? String((j as any).to) : undefined,
+      agentId: (j as any).agentId ? String((j as any).agentId) : undefined,
+      enabledByDefault: Boolean((j as any).enabledByDefault ?? false),
+    });
+  }
+  return out;
+}
+
+async function promptYesNo(header: string) {
+  if (!process.stdin.isTTY) return false;
+  const readline = await import("node:readline/promises");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const ans = await rl.question(`${header}\nProceed? (y/N) `);
+    return ans.trim().toLowerCase() === "y" || ans.trim().toLowerCase() === "yes";
+  } finally {
+    rl.close();
+  }
+}
+
+async function reconcileRecipeCronJobs(opts: {
+  recipe: RecipeFrontmatter;
+  scope: { kind: "team"; teamId: string; recipeId: string; stateDir: string } | { kind: "agent"; agentId: string; recipeId: string; stateDir: string };
+  cronInstallation: CronInstallMode;
+}) {
+  const desired = normalizeCronJobs(opts.recipe);
+  if (!desired.length) return { ok: true, changed: false, note: "no-cron-jobs" as const };
+
+  const mode = opts.cronInstallation;
+  if (mode === "off") {
+    return { ok: true, changed: false, note: "cron-installation-off" as const, desiredCount: desired.length };
+  }
+
+  // Decide whether jobs should be enabled on creation. Default is conservative.
+  let userOptIn = mode === "on";
+  if (mode === "prompt") {
+    const header = `Recipe ${opts.scope.recipeId} defines ${desired.length} cron job(s).\nThese run automatically on a schedule. Install them?`;
+    userOptIn = await promptYesNo(header);
+    if (!userOptIn && !process.stdin.isTTY) {
+      console.error("Non-interactive mode: defaulting cron install to disabled.");
+    }
+  }
+
+  const statePath = path.join(opts.scope.stateDir, "notes", "cron-jobs.json");
+  const state = await loadCronMappingState(statePath);
+
+  const list = spawnOpenClawJson(["cron", "list", "--json"]) as { jobs: OpenClawCronJob[] };
+  const byId = new Map((list?.jobs ?? []).map((j) => [j.id, j] as const));
+
+  const now = Date.now();
+  const desiredIds = new Set(desired.map((j) => j.id));
+
+  const results: any[] = [];
+
+  for (const j of desired) {
+    const key = cronKey(opts.scope as any, j.id);
+    const name = j.name ?? `${opts.scope.kind === "team" ? (opts.scope as any).teamId : (opts.scope as any).agentId} • ${opts.scope.recipeId} • ${j.id}`;
+
+    const desiredSpec = {
+      schedule: j.schedule,
+      message: j.message,
+      timezone: j.timezone ?? "",
+      channel: j.channel ?? "last",
+      to: j.to ?? "",
+      agentId: j.agentId ?? "",
+      name,
+      description: j.description ?? "",
+    };
+    const specHash = hashSpec(desiredSpec);
+
+    const prev = state.entries[key];
+    const installedId = prev?.installedCronId;
+    const existing = installedId ? byId.get(installedId) : undefined;
+
+    const wantEnabled = userOptIn ? Boolean(j.enabledByDefault) : false;
+
+    if (!existing) {
+      // Create new job.
+      const args = [
+        "cron",
+        "add",
+        "--json",
+        "--name",
+        name,
+        "--cron",
+        j.schedule,
+        "--message",
+        j.message,
+        "--announce",
+      ];
+      if (!wantEnabled) args.push("--disabled");
+      if (j.description) args.push("--description", j.description);
+      if (j.timezone) args.push("--tz", j.timezone);
+      if (j.channel) args.push("--channel", j.channel);
+      if (j.to) args.push("--to", j.to);
+      if (j.agentId) args.push("--agent", j.agentId);
+
+      const created = spawnOpenClawJson(args) as { job: OpenClawCronJob };
+      const newId = created?.job?.id;
+      if (!newId) throw new Error("Failed to parse cron add output (missing job.id)");
+
+      state.entries[key] = { installedCronId: newId, specHash, updatedAtMs: now, orphaned: false };
+      results.push({ action: "created", key, installedCronId: newId, enabled: wantEnabled });
+      continue;
+    }
+
+    // Update existing job if spec changed.
+    if (prev?.specHash !== specHash) {
+      const editArgs = [
+        "cron",
+        "edit",
+        existing.id,
+        "--name",
+        name,
+        "--cron",
+        j.schedule,
+        "--message",
+        j.message,
+        "--announce",
+      ];
+      if (j.description) editArgs.push("--description", j.description);
+      if (j.timezone) editArgs.push("--tz", j.timezone);
+      if (j.channel) editArgs.push("--channel", j.channel);
+      if (j.to) editArgs.push("--to", j.to);
+      if (j.agentId) editArgs.push("--agent", j.agentId);
+
+      spawnOpenClawJson(editArgs);
+      results.push({ action: "updated", key, installedCronId: existing.id });
+    } else {
+      results.push({ action: "unchanged", key, installedCronId: existing.id });
+    }
+
+    // Enabled precedence: if user did not opt in, force disabled. Otherwise preserve current enabled state.
+    if (!userOptIn) {
+      if (existing.enabled) {
+        spawnOpenClawJson(["cron", "edit", existing.id, "--disable"]);
+        results.push({ action: "disabled", key, installedCronId: existing.id });
+      }
+    }
+
+    state.entries[key] = { installedCronId: existing.id, specHash, updatedAtMs: now, orphaned: false };
+  }
+
+  // Handle removed jobs: disable safely.
+  for (const [key, entry] of Object.entries(state.entries)) {
+    if (!key.includes(`:recipe:${opts.scope.recipeId}:cron:`)) continue;
+    const cronId = key.split(":cron:")[1] ?? "";
+    if (!cronId || desiredIds.has(cronId)) continue;
+
+    const job = byId.get(entry.installedCronId);
+    if (job && job.enabled) {
+      spawnOpenClawJson(["cron", "edit", job.id, "--disable"]);
+      results.push({ action: "disabled-removed", key, installedCronId: job.id });
+    }
+
+    state.entries[key] = { ...entry, orphaned: true, updatedAtMs: now };
+  }
+
+  await writeJsonFile(statePath, state);
+
+  const changed = results.some((r) => r.action === "created" || r.action === "updated" || r.action?.startsWith("disabled"));
+  return { ok: true, changed, results };
 }
 
 function renderTemplate(raw: string, vars: Record<string, string>) {
@@ -1431,7 +1723,13 @@ const recipesPlugin = {
               await applyAgentSnippetsToOpenClawConfig(api, [result.next.configSnippet]);
             }
 
-            console.log(JSON.stringify(result, null, 2));
+            const cron = await reconcileRecipeCronJobs({
+              recipe,
+              scope: { kind: "agent", agentId: String(options.agentId), recipeId: recipe.id, stateDir: resolvedWorkspaceRoot },
+              cronInstallation: getCfg(api).cronInstallation,
+            });
+
+            console.log(JSON.stringify({ ...result, cron }, null, 2));
           });
 
         cmd
@@ -1558,12 +1856,19 @@ const recipesPlugin = {
               await applyAgentSnippetsToOpenClawConfig(api, snippets);
             }
 
+            const cron = await reconcileRecipeCronJobs({
+              recipe,
+              scope: { kind: "team", teamId, recipeId: recipe.id, stateDir: teamDir },
+              cronInstallation: getCfg(api).cronInstallation,
+            });
+
             console.log(
               JSON.stringify(
                 {
                   teamId,
                   teamDir,
                   agents: results,
+                  cron,
                   next: {
                     note:
                       options.applyConfig
