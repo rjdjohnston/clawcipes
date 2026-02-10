@@ -992,6 +992,152 @@ const recipesPlugin = {
           });
 
         cmd
+          .command("tickets")
+          .description("List tickets for a team (backlog / in-progress / done)")
+          .requiredOption("--team-id <teamId>", "Team id")
+          .option("--json", "Output JSON")
+          .action(async (options: any) => {
+            const workspaceRoot = api.config.agents?.defaults?.workspace;
+            if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
+            const teamId = String(options.teamId);
+            const teamDir = path.resolve(workspaceRoot, "..", `workspace-${teamId}`);
+
+            const dirs = {
+              backlog: path.join(teamDir, "work", "backlog"),
+              inProgress: path.join(teamDir, "work", "in-progress"),
+              done: path.join(teamDir, "work", "done"),
+            } as const;
+
+            const readTickets = async (dir: string, stage: "backlog" | "in-progress" | "done") => {
+              if (!(await fileExists(dir))) return [] as any[];
+              const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".md")).sort();
+              return files.map((f) => {
+                const m = f.match(/^(\d{4})-(.+)\.md$/);
+                return {
+                  stage,
+                  number: m ? Number(m[1]) : null,
+                  id: m ? `${m[1]}-${m[2]}` : f.replace(/\.md$/, ""),
+                  file: path.join(dir, f),
+                };
+              });
+            };
+
+            const out = {
+              teamId,
+              backlog: await readTickets(dirs.backlog, "backlog"),
+              inProgress: await readTickets(dirs.inProgress, "in-progress"),
+              done: await readTickets(dirs.done, "done"),
+            };
+
+            if (options.json) {
+              console.log(JSON.stringify(out, null, 2));
+              return;
+            }
+
+            const print = (label: string, items: any[]) => {
+              console.log(`\n${label} (${items.length})`);
+              for (const t of items) console.log(`- ${t.id}`);
+            };
+            console.log(`Team: ${teamId}`);
+            print("Backlog", out.backlog);
+            print("In progress", out.inProgress);
+            print("Done", out.done);
+          });
+
+        cmd
+          .command("move-ticket")
+          .description("Move a ticket between backlog/in-progress/done (updates Status: line)")
+          .requiredOption("--team-id <teamId>", "Team id")
+          .requiredOption("--ticket <ticket>", "Ticket id or number (e.g. 0007 or 0007-some-slug)")
+          .requiredOption("--to <stage>", "Destination stage: backlog|in-progress|done")
+          .option("--yes", "Skip confirmation")
+          .action(async (options: any) => {
+            const workspaceRoot = api.config.agents?.defaults?.workspace;
+            if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
+            const teamId = String(options.teamId);
+            const teamDir = path.resolve(workspaceRoot, "..", `workspace-${teamId}`);
+
+            const dest = String(options.to);
+            if (!['backlog','in-progress','done'].includes(dest)) {
+              throw new Error("--to must be one of: backlog, in-progress, done");
+            }
+
+            const ticketArg = String(options.ticket);
+            const ticketNum = ticketArg.match(/^\d{4}$/) ? ticketArg : (ticketArg.match(/^(\d{4})-/)?.[1] ?? null);
+
+            const stageDir = (stage: string) => {
+              if (stage === 'backlog') return path.join(teamDir, 'work', 'backlog');
+              if (stage === 'in-progress') return path.join(teamDir, 'work', 'in-progress');
+              if (stage === 'done') return path.join(teamDir, 'work', 'done');
+              throw new Error(`Unknown stage: ${stage}`);
+            };
+
+            const searchDirs = [stageDir('backlog'), stageDir('in-progress'), stageDir('done')];
+
+            const findTicketFile = async () => {
+              for (const dir of searchDirs) {
+                if (!(await fileExists(dir))) continue;
+                const files = await fs.readdir(dir);
+                for (const f of files) {
+                  if (!f.endsWith('.md')) continue;
+                  if (ticketNum && f.startsWith(`${ticketNum}-`)) return path.join(dir, f);
+                  if (!ticketNum && f.replace(/\.md$/, '') === ticketArg) return path.join(dir, f);
+                }
+              }
+              return null;
+            };
+
+            const srcPath = await findTicketFile();
+            if (!srcPath) throw new Error(`Ticket not found: ${ticketArg}`);
+
+            const destDir = stageDir(dest);
+            await ensureDir(destDir);
+            const filename = path.basename(srcPath);
+            const destPath = path.join(destDir, filename);
+
+            const patchStatus = (md: string) => {
+              const nextStatus = dest === 'backlog' ? 'queued' : dest === 'in-progress' ? 'in-progress' : 'done';
+              if (md.match(/^Status:\s.*$/m)) {
+                return md.replace(/^Status:\s.*$/m, `Status: ${nextStatus}`);
+              }
+              return md.replace(/^(# .+\n)/, `$1\nStatus: ${nextStatus}\n`);
+            };
+
+            const plan = { from: srcPath, to: destPath };
+
+            if (!options.yes && process.stdin.isTTY) {
+              console.log(JSON.stringify({ plan }, null, 2));
+              const readline = await import('node:readline/promises');
+              const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+              try {
+                const ans = await rl.question(`Move ticket to ${dest}? (y/N) `);
+                const ok = ans.trim().toLowerCase() === 'y' || ans.trim().toLowerCase() === 'yes';
+                if (!ok) {
+                  console.error('Aborted; no changes made.');
+                  return;
+                }
+              } finally {
+                rl.close();
+              }
+            } else if (!options.yes && !process.stdin.isTTY) {
+              console.error('Refusing to move without confirmation in non-interactive mode. Re-run with --yes.');
+              process.exitCode = 2;
+              console.log(JSON.stringify({ ok: false, plan }, null, 2));
+              return;
+            }
+
+            const md = await fs.readFile(srcPath, 'utf8');
+            const nextMd = patchStatus(md);
+            await fs.writeFile(srcPath, nextMd, 'utf8');
+
+            if (srcPath !== destPath) {
+              await fs.rename(srcPath, destPath);
+            }
+
+            console.log(JSON.stringify({ ok: true, moved: plan }, null, 2));
+          });
+
+        cmd
           .command("scaffold")
           .description("Scaffold an agent from a recipe")
           .argument("<recipeId>", "Recipe id")
