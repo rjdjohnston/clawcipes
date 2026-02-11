@@ -1775,8 +1775,23 @@ const recipesPlugin = {
             const doneDir = path.join(workDir, "done");
             const assignmentsDir = path.join(workDir, "assignments");
 
+            // Seed standard team files (createOnly unless --overwrite)
+            const overwrite = !!options.overwrite;
+
+            const sharedContextDir = path.join(teamDir, "shared-context");
+            const sharedContextOutputsDir = path.join(sharedContextDir, "agent-outputs");
+            const sharedContextFeedbackDir = path.join(sharedContextDir, "feedback");
+            const sharedContextKpisDir = path.join(sharedContextDir, "kpis");
+            const sharedContextCalendarDir = path.join(sharedContextDir, "calendar");
+
             await Promise.all([
+              // Back-compat: keep existing shared/ folder, but shared-context/ is canonical going forward.
               ensureDir(path.join(teamDir, "shared")),
+              ensureDir(sharedContextDir),
+              ensureDir(sharedContextOutputsDir),
+              ensureDir(sharedContextFeedbackDir),
+              ensureDir(sharedContextKpisDir),
+              ensureDir(sharedContextCalendarDir),
               ensureDir(path.join(teamDir, "inbox")),
               ensureDir(path.join(teamDir, "outbox")),
               ensureDir(notesDir),
@@ -1787,8 +1802,11 @@ const recipesPlugin = {
               ensureDir(assignmentsDir),
             ]);
 
-            // Seed standard team files (createOnly unless --overwrite)
-            const overwrite = !!options.overwrite;
+            // Seed shared-context starter schema (createOnly unless --overwrite)
+            const sharedPrioritiesPath = path.join(sharedContextDir, "priorities.md");
+            const prioritiesMd = `# Priorities — ${teamId}\n\n- (empty)\n\n## Notes\n- Lead curates this file.\n- Non-lead roles should append updates to shared-context/agent-outputs/ instead.\n`;
+            await writeFileSafely(sharedPrioritiesPath, prioritiesMd, overwrite ? "overwrite" : "createOnly");
+
             const planPath = path.join(notesDir, "plan.md");
             const statusPath = path.join(notesDir, "status.md");
             const ticketsPath = path.join(teamDir, "TICKETS.md");
@@ -1848,7 +1866,7 @@ const recipesPlugin = {
 
             // Create a minimal TEAM.md
             const teamMdPath = path.join(teamDir, "TEAM.md");
-            const teamMd = `# ${teamId}\n\nShared workspace for this agent team.\n\n## Folders\n- inbox/ — requests\n- outbox/ — deliverables\n- shared/ — shared artifacts\n- notes/ — notes\n- work/ — working files\n`;
+            const teamMd = `# ${teamId}\n\nShared workspace for this agent team.\n\n## Folders\n- inbox/ — requests\n- outbox/ — deliverables\n- shared-context/ — curated shared context + append-only agent outputs\n- shared/ — legacy shared artifacts (back-compat)\n- notes/ — plan + status\n- work/ — working files\n`;
             await writeFileSafely(teamMdPath, teamMd, options.overwrite ? "overwrite" : "createOnly");
 
             if (options.applyConfig) {
