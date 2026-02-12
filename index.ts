@@ -2,21 +2,8 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import path from "node:path";
 import fs from "node:fs/promises";
 import crypto from "node:crypto";
-import os from "node:os";
 import JSON5 from "json5";
 import YAML from "yaml";
-
-import { renderTeamMd, renderTicketsMd } from "./src/lib/scaffold-templates";
-import { upsertBindingInConfig as upsertBindingInConfigCore } from "./src/lib/bindings";
-import { handoffTicket as handoffTicketCore } from "./src/lib/ticket-workflow";
-import { ensureLaneDir, RecipesCliError } from "./src/lib/lanes";
-import { findTicketFile as findTicketFileAnyLane, parseOwnerFromMd } from "./src/lib/ticket-finder";
-import {
-  DEFAULT_ALLOWED_PREFIXES,
-  DEFAULT_PROTECTED_TEAM_IDS,
-  executeWorkspaceCleanup,
-  planWorkspaceCleanup,
-} from "./src/lib/cleanup-workspaces";
 
 type RecipesConfig = {
   workspaceRecipesDir?: string;
@@ -201,34 +188,6 @@ async function ensureDir(p: string) {
   await fs.mkdir(p, { recursive: true });
 }
 
-function formatRecipesCliError(commandLabel: string, err: unknown) {
-  if (err instanceof RecipesCliError) {
-    const lines = [
-      `[recipes] ERROR: ${err.message}`,
-      `- command: ${err.command ?? commandLabel}`,
-      ...(err.missingPath ? [`- path: ${err.missingPath}`] : []),
-      ...(err.suggestedFix ? [`- suggested fix: ${err.suggestedFix}`] : []),
-    ];
-    return lines.join("\n");
-  }
-
-  if (err instanceof Error) {
-    return `[recipes] ERROR: ${err.message}\n- command: ${commandLabel}`;
-  }
-
-  return `[recipes] ERROR: ${String(err)}\n- command: ${commandLabel}`;
-}
-
-async function runRecipesCommand<T>(commandLabel: string, fn: () => Promise<T>): Promise<T | null> {
-  try {
-    return await fn();
-  } catch (err) {
-    console.error(formatRecipesCliError(commandLabel, err));
-    process.exitCode = process.exitCode && process.exitCode !== 0 ? process.exitCode : 1;
-    return null;
-  }
-}
-
 type CronInstallMode = "off" | "prompt" | "on";
 
 type CronMappingStateV1 = {
@@ -286,73 +245,17 @@ type OpenClawCronJob = {
   description?: string;
 };
 
-type CronStoreV1 = {
-  version: 1;
-  jobs: any[];
-};
-
-function cronStorePath() {
-  // Gateway cron store (default): ~/.openclaw/cron/jobs.json
-  return path.join(os.homedir(), ".openclaw", "cron", "jobs.json");
-}
-
-async function loadCronStore(): Promise<CronStoreV1> {
-  try {
-    const raw = await fs.readFile(cronStorePath(), "utf8");
-    const parsed = JSON.parse(raw) as CronStoreV1;
-    if (parsed && parsed.version === 1 && Array.isArray(parsed.jobs)) return parsed;
-  } catch {
-    // ignore
+function spawnOpenClawJson(args: string[]) {
+  const { spawnSync } = require("node:child_process") as typeof import("node:child_process");
+  const res = spawnSync("openclaw", args, { encoding: "utf8" });
+  if (res.status !== 0) {
+    const err = new Error(`openclaw ${args.join(" ")} failed (exit=${res.status})`);
+    (err as any).stdout = res.stdout;
+    (err as any).stderr = res.stderr;
+    throw err;
   }
-  return { version: 1, jobs: [] };
-}
-
-async function saveCronStore(store: CronStoreV1) {
-  const p = cronStorePath();
-  await ensureDir(path.dirname(p));
-  await fs.writeFile(p, JSON.stringify(store, null, 2) + "\n", "utf8");
-}
-
-function buildCronJobPayloadAgentTurn(message: string) {
-  return {
-    kind: "agentTurn",
-    message,
-    timeoutSeconds: 60,
-  };
-}
-
-function buildCronJobFromSpec(opts: {
-  name: string;
-  description?: string;
-  scheduleExpr: string;
-  tz?: string;
-  message: string;
-  enabled: boolean;
-  agentId: string;
-  delivery?: { channel?: string; to?: string };
-}) {
-  const now = Date.now();
-  const delivery =
-    opts.delivery?.channel && opts.delivery?.to
-      ? { mode: "announce", channel: opts.delivery.channel, to: opts.delivery.to, bestEffort: true }
-      : { mode: "announce" };
-
-  return {
-    id: crypto.randomUUID(),
-    agentId: opts.agentId || "main",
-    name: opts.name,
-    description: opts.description,
-    enabled: opts.enabled,
-    deleteAfterRun: false,
-    createdAtMs: now,
-    updatedAtMs: now,
-    schedule: { kind: "cron", expr: opts.scheduleExpr, tz: opts.tz },
-    sessionTarget: "isolated",
-    wakeMode: "next-heartbeat",
-    payload: buildCronJobPayloadAgentTurn(opts.message),
-    delivery,
-    state: {},
-  };
+  const out = String(res.stdout ?? "").trim();
+  return out ? (JSON.parse(out) as any) : null;
 }
 
 function normalizeCronJobs(frontmatter: RecipeFrontmatter): CronJobSpec[] {
@@ -421,25 +324,15 @@ async function reconcileRecipeCronJobs(opts: {
     const header = `Recipe ${opts.scope.recipeId} defines ${desired.length} cron job(s).\nThese run automatically on a schedule. Install them?`;
     userOptIn = await promptYesNo(header);
     if (!userOptIn && !process.stdin.isTTY) {
-      console.error("Non-interactive mode: skipping cron installation (no consent). Use cronInstallation=on to force install.");
+      console.error("Non-interactive mode: defaulting cron install to disabled.");
     }
-  }
-
-  // Never install cron jobs without explicit consent (unless cronInstallation=on).
-  if (!userOptIn) {
-    return {
-      ok: true,
-      changed: false,
-      note: "cron-installation-declined" as const,
-      desiredCount: desired.length,
-    };
   }
 
   const statePath = path.join(opts.scope.stateDir, "notes", "cron-jobs.json");
   const state = await loadCronMappingState(statePath);
 
-  const store = await loadCronStore();
-  const byId = new Map((store.jobs ?? []).map((j: any) => [j.id, j] as const));
+  const list = spawnOpenClawJson(["cron", "list", "--json"]) as { jobs: OpenClawCronJob[] };
+  const byId = new Map((list?.jobs ?? []).map((j) => [j.id, j] as const));
 
   const now = Date.now();
   const desiredIds = new Set(desired.map((j) => j.id));
@@ -456,9 +349,7 @@ async function reconcileRecipeCronJobs(opts: {
       timezone: j.timezone ?? "",
       channel: j.channel ?? "last",
       to: j.to ?? "",
-      agentId:
-        j.agentId ??
-        (opts.scope.kind === "team" ? `${(opts.scope as any).teamId}-lead` : ""),
+      agentId: j.agentId ?? "",
       name,
       description: j.description ?? "",
     };
@@ -471,43 +362,65 @@ async function reconcileRecipeCronJobs(opts: {
     const wantEnabled = userOptIn ? Boolean(j.enabledByDefault) : false;
 
     if (!existing) {
-      // Create new job in cron store.
-      const newJob = buildCronJobFromSpec({
+      // Create new job.
+      const args = [
+        "cron",
+        "add",
+        "--json",
+        "--name",
         name,
-        description: j.description,
-        scheduleExpr: j.schedule,
-        tz: j.timezone,
-        message: j.message,
-        enabled: wantEnabled,
-        agentId: desiredSpec.agentId || "main",
-        delivery: j.channel && j.to ? { channel: j.channel, to: j.to } : undefined,
-      });
+        "--cron",
+        j.schedule,
+        "--message",
+        j.message,
+        "--announce",
+      ];
+      if (!wantEnabled) args.push("--disabled");
+      if (j.description) args.push("--description", j.description);
+      if (j.timezone) args.push("--tz", j.timezone);
+      if (j.channel) args.push("--channel", j.channel);
+      if (j.to) args.push("--to", j.to);
+      if (j.agentId) args.push("--agent", j.agentId);
 
-      store.jobs.push(newJob);
-      state.entries[key] = { installedCronId: newJob.id, specHash, updatedAtMs: now, orphaned: false };
-      results.push({ action: "created", key, installedCronId: newJob.id, enabled: wantEnabled });
+      const created = spawnOpenClawJson(args) as any;
+      const newId = created?.id ?? created?.job?.id;
+      if (!newId) throw new Error("Failed to parse cron add output (missing id)");
+
+      state.entries[key] = { installedCronId: newId, specHash, updatedAtMs: now, orphaned: false };
+      results.push({ action: "created", key, installedCronId: newId, enabled: wantEnabled });
       continue;
     }
 
     // Update existing job if spec changed.
     if (prev?.specHash !== specHash) {
-      existing.name = name;
-      existing.description = j.description ?? existing.description;
-      existing.schedule = { kind: "cron", expr: j.schedule, tz: j.timezone };
-      existing.payload = buildCronJobPayloadAgentTurn(j.message);
-      existing.agentId = desiredSpec.agentId || existing.agentId || "main";
-      if (j.channel && j.to) existing.delivery = { mode: "announce", channel: j.channel, to: j.to, bestEffort: true };
-      existing.updatedAtMs = now;
+      const editArgs = [
+        "cron",
+        "edit",
+        existing.id,
+        "--name",
+        name,
+        "--cron",
+        j.schedule,
+        "--message",
+        j.message,
+        "--announce",
+      ];
+      if (j.description) editArgs.push("--description", j.description);
+      if (j.timezone) editArgs.push("--tz", j.timezone);
+      if (j.channel) editArgs.push("--channel", j.channel);
+      if (j.to) editArgs.push("--to", j.to);
+      if (j.agentId) editArgs.push("--agent", j.agentId);
+
+      spawnOpenClawJson(editArgs);
       results.push({ action: "updated", key, installedCronId: existing.id });
     } else {
       results.push({ action: "unchanged", key, installedCronId: existing.id });
     }
 
-    // Enabled precedence: if user did not opt in, force disabled.
+    // Enabled precedence: if user did not opt in, force disabled. Otherwise preserve current enabled state.
     if (!userOptIn) {
       if (existing.enabled) {
-        existing.enabled = false;
-        existing.updatedAtMs = now;
+        spawnOpenClawJson(["cron", "edit", existing.id, "--disable"]);
         results.push({ action: "disabled", key, installedCronId: existing.id });
       }
     }
@@ -523,8 +436,7 @@ async function reconcileRecipeCronJobs(opts: {
 
     const job = byId.get(entry.installedCronId);
     if (job && job.enabled) {
-      job.enabled = false;
-      job.updatedAtMs = now;
+      spawnOpenClawJson(["cron", "edit", job.id, "--disable"]);
       results.push({ action: "disabled-removed", key, installedCronId: job.id });
     }
 
@@ -532,7 +444,6 @@ async function reconcileRecipeCronJobs(opts: {
   }
 
   await writeJsonFile(statePath, state);
-  await saveCronStore(store);
 
   const changed = results.some((r) => r.action === "created" || r.action === "updated" || r.action?.startsWith("disabled"));
   return { ok: true, changed, results };
@@ -654,7 +565,24 @@ function stableStringify(x: any) {
 }
 
 function upsertBindingInConfig(cfgObj: any, binding: BindingSnippet) {
-  return upsertBindingInConfigCore(cfgObj, binding);
+  if (!Array.isArray(cfgObj.bindings)) cfgObj.bindings = [];
+  const list: any[] = cfgObj.bindings;
+
+  const sig = stableStringify({ agentId: binding.agentId, match: binding.match });
+  const idx = list.findIndex((b) => stableStringify({ agentId: b?.agentId, match: b?.match }) === sig);
+
+  if (idx >= 0) {
+    // Update in place (preserve ordering)
+    list[idx] = { ...list[idx], ...binding };
+    return { changed: false, note: "already-present" as const };
+  }
+
+  // Most-specific-first: if a peer match is specified, insert at front so it wins.
+  // Otherwise append.
+  if (binding.match?.peer) list.unshift(binding);
+  else list.push(binding);
+
+  return { changed: true, note: "added" as const };
 }
 
 function removeBindingsInConfig(cfgObj: any, opts: { agentId?: string; match: BindingMatch }) {
@@ -1186,22 +1114,28 @@ const recipesPlugin = {
               console.error(header);
             }
 
-            // SECURITY NOTE: avoid shelling out from plugins.
-            // We intentionally do NOT auto-run `npx clawhub ...` here.
-            // Instead, print the exact commands to run manually.
-            const commands = missing.map(
-              (slug) => `npx clawhub@latest --workdir "${workdir}" --dir "${dirName}" install "${slug}"`,
-            );
+            // Use clawhub CLI. Force install path based on scope.
+            const { spawnSync } = await import("node:child_process");
+            for (const slug of missing) {
+              const res = spawnSync(
+                "npx",
+                ["clawhub@latest", "--workdir", workdir, "--dir", dirName, "install", slug],
+                { stdio: "inherit" },
+              );
+              if (res.status !== 0) {
+                process.exitCode = res.status ?? 1;
+                console.error(`Failed installing ${slug} (exit=${process.exitCode}).`);
+                return;
+              }
+            }
 
             console.log(
               JSON.stringify(
                 {
-                  ok: false,
-                  reason: "manual-install-required",
-                  missing,
+                  ok: true,
+                  installed: missing,
                   installDir,
-                  commands,
-                  next: "Run the commands above, then: openclaw gateway restart",
+                  next: `Try: openclaw skills list (or check ${installDir})`,
                 },
                 null,
                 2,
@@ -1373,26 +1307,15 @@ const recipesPlugin = {
             const readTickets = async (dir: string, stage: "backlog" | "in-progress" | "testing" | "done") => {
               if (!(await fileExists(dir))) return [] as any[];
               const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".md")).sort();
-              return Promise.all(
-                files.map(async (f) => {
-                  const m = f.match(/^(\d{4})-(.+)\.md$/);
-                  const file = path.join(dir, f);
-                  let owner: string | null = null;
-                  try {
-                    const md = await fs.readFile(file, 'utf8');
-                    owner = parseOwnerFromMd(md);
-                  } catch {
-                    owner = null;
-                  }
-                  return {
-                    stage,
-                    number: m ? Number(m[1]) : null,
-                    id: m ? `${m[1]}-${m[2]}` : f.replace(/\.md$/, ""),
-                    owner,
-                    file,
-                  };
-                }),
-              );
+              return files.map((f) => {
+                const m = f.match(/^(\d{4})-(.+)\.md$/);
+                return {
+                  stage,
+                  number: m ? Number(m[1]) : null,
+                  id: m ? `${m[1]}-${m[2]}` : f.replace(/\.md$/, ""),
+                  file: path.join(dir, f),
+                };
+              });
             };
 
             const out = {
@@ -1427,12 +1350,11 @@ const recipesPlugin = {
           .requiredOption("--to <stage>", "Destination stage: backlog|in-progress|testing|done")
           .option("--completed", "When moving to done, add Completed: timestamp")
           .option("--yes", "Skip confirmation")
-          .action(async (options: any) =>
-            runRecipesCommand("openclaw recipes move-ticket", async () => {
-              const workspaceRoot = api.config.agents?.defaults?.workspace;
-              if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
-              const teamId = String(options.teamId);
-              const teamDir = path.resolve(workspaceRoot, "..", `workspace-${teamId}`);
+          .action(async (options: any) => {
+            const workspaceRoot = api.config.agents?.defaults?.workspace;
+            if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
+            const teamId = String(options.teamId);
+            const teamDir = path.resolve(workspaceRoot, "..", `workspace-${teamId}`);
 
             const dest = String(options.to);
             if (!['backlog','in-progress','testing','done'].includes(dest)) {
@@ -1469,11 +1391,7 @@ const recipesPlugin = {
             if (!srcPath) throw new Error(`Ticket not found: ${ticketArg}`);
 
             const destDir = stageDir(dest);
-            if (dest === 'testing') {
-              await ensureLaneDir({ teamDir, lane: 'testing', command: 'openclaw recipes move-ticket' });
-            } else {
-              await ensureDir(destDir);
-            }
+            await ensureDir(destDir);
             const filename = path.basename(srcPath);
             const destPath = path.join(destDir, filename);
 
@@ -1532,7 +1450,7 @@ const recipesPlugin = {
             }
 
             console.log(JSON.stringify({ ok: true, moved: plan }, null, 2));
-          }));
+          });
 
         cmd
           .command("assign")
@@ -1553,13 +1471,36 @@ const recipesPlugin = {
               throw new Error("--owner must be one of: dev, devops, lead, test");
             }
 
+            const stageDir = (stage: string) => {
+              if (stage === 'backlog') return path.join(teamDir, 'work', 'backlog');
+              if (stage === 'in-progress') return path.join(teamDir, 'work', 'in-progress');
+              if (stage === 'done') return path.join(teamDir, 'work', 'done');
+              throw new Error(`Unknown stage: ${stage}`);
+            };
+            const searchDirs = [stageDir('backlog'), stageDir('in-progress'), stageDir('done')];
+
             const ticketArg = String(options.ticket);
-            const ticketPath = await findTicketFileAnyLane({ teamDir, ticket: ticketArg });
+            const ticketNum = ticketArg.match(/^\d{4}$/) ? ticketArg : (ticketArg.match(/^(\d{4})-/)?.[1] ?? null);
+
+            const findTicketFile = async () => {
+              for (const dir of searchDirs) {
+                if (!(await fileExists(dir))) continue;
+                const files = await fs.readdir(dir);
+                for (const f of files) {
+                  if (!f.endsWith('.md')) continue;
+                  if (ticketNum && f.startsWith(`${ticketNum}-`)) return path.join(dir, f);
+                  if (!ticketNum && f.replace(/\.md$/, '') === ticketArg) return path.join(dir, f);
+                }
+              }
+              return null;
+            };
+
+            const ticketPath = await findTicketFile();
             if (!ticketPath) throw new Error(`Ticket not found: ${ticketArg}`);
 
             const filename = path.basename(ticketPath);
             const m = filename.match(/^(\d{4})-(.+)\.md$/);
-            const ticketNumStr = m?.[1] ?? '0000';
+            const ticketNumStr = m?.[1] ?? (ticketNum ?? '0000');
             const slug = m?.[2] ?? (ticketArg.replace(/^\d{4}-?/, '') || 'ticket');
 
             const assignmentsDir = path.join(teamDir, 'work', 'assignments');
@@ -1605,72 +1546,6 @@ const recipesPlugin = {
           });
 
         cmd
-          .command("handoff")
-          .description("QA handoff: assign ticket to tester + move to testing")
-          .requiredOption("--team-id <teamId>", "Team id")
-          .requiredOption("--ticket <ticket>", "Ticket id or number")
-          .option("--tester <tester>", "Tester/owner (default: test)", "test")
-          .option("--overwrite", "Overwrite existing assignment file")
-          .option("--yes", "Skip confirmation")
-          .action(async (options: any) =>
-            runRecipesCommand("openclaw recipes handoff", async () => {
-              const workspaceRoot = api.config.agents?.defaults?.workspace;
-              if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
-              const teamId = String(options.teamId);
-              const teamDir = path.resolve(workspaceRoot, "..", `workspace-${teamId}`);
-
-            const tester = String(options.tester ?? "test");
-
-            const plan = {
-              teamId,
-              ticket: String(options.ticket),
-              tester,
-              overwriteAssignment: !!options.overwrite,
-            };
-
-            if (!options.yes && process.stdin.isTTY) {
-              console.log(JSON.stringify({ plan }, null, 2));
-              const readline = await import("node:readline/promises");
-              const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-              try {
-                const ans = await rl.question(`Handoff to ${tester} and move to testing? (y/N) `);
-                const ok = ans.trim().toLowerCase() === "y" || ans.trim().toLowerCase() === "yes";
-                if (!ok) {
-                  console.error("Aborted; no changes made.");
-                  return;
-                }
-              } finally {
-                rl.close();
-              }
-            } else if (!options.yes && !process.stdin.isTTY) {
-              console.error("Refusing to handoff without confirmation in non-interactive mode. Re-run with --yes.");
-              process.exitCode = 2;
-              console.log(JSON.stringify({ ok: false, plan }, null, 2));
-              return;
-            }
-
-            const res = await handoffTicketCore({
-              teamDir,
-              ticket: String(options.ticket),
-              tester,
-              overwriteAssignment: !!options.overwrite,
-            });
-
-            console.log(
-              JSON.stringify(
-                {
-                  ok: true,
-                  moved: res.moved ? { from: res.srcPath, to: res.destPath } : null,
-                  ticket: path.relative(teamDir, res.destPath),
-                  assignment: path.relative(teamDir, res.assignmentPath),
-                },
-                null,
-                2,
-              ),
-            );
-          }));
-
-        cmd
           .command("take")
           .description("Shortcut: assign ticket to owner + move to in-progress")
           .requiredOption("--team-id <teamId>", "Team id")
@@ -1688,8 +1563,31 @@ const recipesPlugin = {
               throw new Error("--owner must be one of: dev, devops, lead, test");
             }
 
+            const stageDir = (stage: string) => {
+              if (stage === 'backlog') return path.join(teamDir, 'work', 'backlog');
+              if (stage === 'in-progress') return path.join(teamDir, 'work', 'in-progress');
+              if (stage === 'done') return path.join(teamDir, 'work', 'done');
+              throw new Error(`Unknown stage: ${stage}`);
+            };
+            const searchDirs = [stageDir('backlog'), stageDir('in-progress'), stageDir('done')];
+
             const ticketArg = String(options.ticket);
-            const srcPath = await findTicketFileAnyLane({ teamDir, ticket: ticketArg });
+            const ticketNum = ticketArg.match(/^\d{4}$/) ? ticketArg : (ticketArg.match(/^(\d{4})-/)?.[1] ?? null);
+
+            const findTicketFile = async () => {
+              for (const dir of searchDirs) {
+                if (!(await fileExists(dir))) continue;
+                const files = await fs.readdir(dir);
+                for (const f of files) {
+                  if (!f.endsWith('.md')) continue;
+                  if (ticketNum && f.startsWith(`${ticketNum}-`)) return path.join(dir, f);
+                  if (!ticketNum && f.replace(/\.md$/, '') === ticketArg) return path.join(dir, f);
+                }
+              }
+              return null;
+            };
+
+            const srcPath = await findTicketFile();
             if (!srcPath) throw new Error(`Ticket not found: ${ticketArg}`);
 
             const destDir = stageDir('in-progress');
@@ -1740,7 +1638,7 @@ const recipesPlugin = {
             }
 
             const m = filename.match(/^(\d{4})-(.+)\.md$/);
-            const ticketNumStr = m?.[1] ?? '0000';
+            const ticketNumStr = m?.[1] ?? (ticketNum ?? '0000');
             const slug = m?.[2] ?? (ticketArg.replace(/^\d{4}-?/, '') || 'ticket');
             const assignmentsDir = path.join(teamDir, 'work', 'assignments');
             await ensureDir(assignmentsDir);
@@ -1757,61 +1655,26 @@ const recipesPlugin = {
           .requiredOption("--team-id <teamId>", "Team id")
           .requiredOption("--ticket <ticket>", "Ticket id or number")
           .option("--yes", "Skip confirmation")
-          .action(async (options: any) =>
-            runRecipesCommand("openclaw recipes complete", async () => {
-              const workspaceRoot = api.config.agents?.defaults?.workspace;
-              if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
-              const teamId = String(options.teamId);
-              const teamDir = path.resolve(workspaceRoot, "..", `workspace-${teamId}`);
+          .action(async (options: any) => {
+            const args = [
+              'recipes',
+              'move-ticket',
+              '--team-id',
+              String(options.teamId),
+              '--ticket',
+              String(options.ticket),
+              '--to',
+              'done',
+              '--completed',
+            ];
+            if (options.yes) args.push('--yes');
 
-              const ticketArg = String(options.ticket);
-              const srcPath = await findTicketFileAnyLane({ teamDir, ticket: ticketArg });
-              if (!srcPath) throw new Error(`Ticket not found: ${ticketArg}`);
-
-              const destDir = path.join(teamDir, 'work', 'done');
-              await ensureDir(destDir);
-
-              const filename = path.basename(srcPath);
-              const destPath = path.join(destDir, filename);
-
-              const plan = { from: srcPath, to: destPath, completed: true };
-
-              if (!options.yes && process.stdin.isTTY) {
-                console.log(JSON.stringify({ plan }, null, 2));
-                const readline = await import('node:readline/promises');
-                const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-                try {
-                  const ans = await rl.question(`Move to done and mark completed? (y/N) `);
-                  const ok = ans.trim().toLowerCase() === 'y' || ans.trim().toLowerCase() === 'yes';
-                  if (!ok) {
-                    console.error('Aborted; no changes made.');
-                    return;
-                  }
-                } finally {
-                  rl.close();
-                }
-              } else if (!options.yes && !process.stdin.isTTY) {
-                console.error('Refusing to complete without confirmation in non-interactive mode. Re-run with --yes.');
-                process.exitCode = 2;
-                console.log(JSON.stringify({ ok: false, plan }, null, 2));
-                return;
-              }
-
-              const md = await fs.readFile(srcPath, 'utf8');
-              let out = md;
-              if (out.match(/^Status:\s.*$/m)) out = out.replace(/^Status:\s.*$/m, `Status: done`);
-              else out = out.replace(/^(# .+\n)/, `$1\nStatus: done\n`);
-
-              const completedIso = new Date().toISOString();
-              if (out.match(/^Completed:\s.*$/m)) out = out.replace(/^Completed:\s.*$/m, `Completed: ${completedIso}`);
-              else out = out.replace(/^(# .+\n)/, `$1\nCompleted: ${completedIso}\n`);
-
-              await fs.writeFile(srcPath, out, 'utf8');
-              if (srcPath !== destPath) await fs.rename(srcPath, destPath);
-
-              console.log(JSON.stringify({ ok: true, moved: { from: srcPath, to: destPath }, completed: completedIso }, null, 2));
-            }),
-          );
+            const { spawnSync } = await import('node:child_process');
+            const res = spawnSync('openclaw', args, { stdio: 'inherit' });
+            if (res.status !== 0) {
+              process.exitCode = res.status ?? 1;
+            }
+          });
 
         cmd
           .command("scaffold")
@@ -1948,17 +1811,14 @@ const recipesPlugin = {
 
             const planPath = path.join(notesDir, "plan.md");
             const statusPath = path.join(notesDir, "status.md");
-            const qaChecklistPath = path.join(notesDir, "QA_CHECKLIST.md");
             const ticketsPath = path.join(teamDir, "TICKETS.md");
 
             const planMd = `# Plan — ${teamId}\n\n- (empty)\n`;
             const statusMd = `# Status — ${teamId}\n\n- (empty)\n`;
-            const qaChecklistMd = `# QA checklist (template)\n\nUse this checklist for any ticket in work/testing/ before moving it to work/done/.\n\n## Where verification results live\nPreferred (canonical): create a sibling verification note:\n- work/testing/<ticket>.testing-verified.md\n\nAlternative (allowed for tiny changes): add a \"## QA verification\" section directly in the ticket file.\n\n## Rule: when a ticket may move to done\nA ticket may move testing → done only when a verification record exists.\n\n## Copy/paste template\n\n\`\`\`md\n# QA verification — <ticket-id>\n\nTicket: <relative-path-to-ticket>\nVerified by: <name/role>\nDate: <YYYY-MM-DD>\n\n## Environment\n- Machine: <host / OS>\n- Repo(s): <repo + path>\n- Branch/commit: <branch + sha>\n- Build/version: <version if applicable>\n\n## Test plan\n### Commands run\n- <command 1>\n- <command 2>\n\n### Manual checks\n- [ ] Acceptance criteria verified\n- [ ] Negative case / failure mode checked (if applicable)\n- [ ] No unexpected file changes\n\n## Results\nStatus: PASS | FAIL\n\n### Notes\n- <what you observed>\n\n### Evidence\n- Logs/snippets:\n  - <paste key excerpt>\n- Links:\n  - <PR/issue/build link>\n\n## If FAIL\n- What broke:\n- How to reproduce:\n- Suggested fix / owner:\n\`\`\`\n`;
-            const ticketsMd = renderTicketsMd(teamId);
+            const ticketsMd = `# Tickets — ${teamId}\n\n## Naming\n- Backlog tickets live in work/backlog/\n- In-progress tickets live in work/in-progress/\n- Testing tickets live in work/testing/\n- Done tickets live in work/done/\n- Filename ordering is the queue: 0001-..., 0002-...\n\n## Stages\n- backlog → in-progress → testing → done\n\n## QA handoff\n- When work is ready for QA: move the ticket to \`work/testing/\` and assign to test.\n\n## Required fields\nEach ticket should include:\n- Title\n- Context\n- Requirements\n- Acceptance criteria\n- Owner (dev/devops/lead/test)\n- Status (queued/in-progress/testing/done)\n\n## Example\n\n\`\`\`md\n# 0001-example-ticket\n\nOwner: dev\nStatus: queued\n\n## Context\n...\n\n## Requirements\n- ...\n\n## Acceptance criteria\n- ...\n\`\`\`\n`;
 
             await writeFileSafely(planPath, planMd, overwrite ? "overwrite" : "createOnly");
             await writeFileSafely(statusPath, statusMd, overwrite ? "overwrite" : "createOnly");
-            await writeFileSafely(qaChecklistPath, qaChecklistMd, overwrite ? "overwrite" : "createOnly");
             await writeFileSafely(ticketsPath, ticketsMd, overwrite ? "overwrite" : "createOnly");
 
             const agents = recipe.agents ?? [];
@@ -2008,7 +1868,7 @@ const recipesPlugin = {
 
             // Create a minimal TEAM.md
             const teamMdPath = path.join(teamDir, "TEAM.md");
-            const teamMd = renderTeamMd(teamId);
+            const teamMd = `# ${teamId}\n\nShared workspace for this agent team.\n\n## Folders\n- inbox/ — requests\n- outbox/ — deliverables\n- shared-context/ — curated shared context + append-only agent outputs\n- shared/ — legacy shared artifacts (back-compat)\n- notes/ — plan + status\n- work/ — working files\n`;
             await writeFileSafely(teamMdPath, teamMd, options.overwrite ? "overwrite" : "createOnly");
 
             if (options.applyConfig) {
@@ -2041,74 +1901,6 @@ const recipesPlugin = {
               ),
             );
           });
-
-        cmd
-          .command("cleanup-workspaces")
-          .description("Dry-run (default) or delete temporary scaffold/test workspaces under ~/.openclaw with safety rails")
-          .option("--yes", "Actually delete eligible workspaces (otherwise: dry-run)")
-          .option("--dry-run", "Force dry-run (lists candidates; deletes nothing)")
-          .option(
-            "--prefix <prefix>",
-            `Allowed teamId prefix (repeatable). Default: ${DEFAULT_ALLOWED_PREFIXES.join(", ")}`,
-            (val: string, acc: string[]) => {
-              acc.push(String(val));
-              return acc;
-            },
-            [] as string[],
-          )
-          .option("--json", "Output JSON")
-          .action(async (options: any) =>
-            runRecipesCommand("openclaw recipes cleanup-workspaces", async () => {
-              const baseWorkspace = api.config.agents?.defaults?.workspace;
-              if (!baseWorkspace) throw new Error("agents.defaults.workspace is not set in config");
-
-              // Workspaces live alongside the default workspace (same parent dir): ~/.openclaw/workspace-*
-              const rootDir = path.resolve(baseWorkspace, "..");
-
-              const prefixes: string[] = (options.prefix as string[])?.length ? (options.prefix as string[]) : [...DEFAULT_ALLOWED_PREFIXES];
-              const protectedTeamIds: string[] = [...DEFAULT_PROTECTED_TEAM_IDS];
-
-              const plan = await planWorkspaceCleanup({ rootDir, prefixes, protectedTeamIds });
-              const yes = Boolean(options.yes) && !Boolean(options.dryRun);
-              const result = await executeWorkspaceCleanup(plan, { yes });
-
-              if (options.json) {
-                console.log(JSON.stringify(result, null, 2));
-                return;
-              }
-
-              const candidates = result.candidates;
-              const skipped = result.skipped;
-
-              console.log(`Root: ${result.rootDir}`);
-              console.log(`Mode: ${result.dryRun ? "dry-run" : "delete"}`);
-              console.log(`Allowed prefixes: ${prefixes.join(", ")}`);
-              console.log(`Protected teams: ${protectedTeamIds.join(", ")}`);
-
-              console.log(`\nCandidates (${candidates.length})`);
-              for (const c of candidates) console.log(`- ${c.dirName}`);
-
-              console.log(`\nSkipped (${skipped.length})`);
-              for (const s of skipped) {
-                const label = s.dirName + (s.teamId ? ` (${s.teamId})` : "");
-                console.log(`- ${label}: ${s.reason}`);
-              }
-
-              if (result.dryRun) {
-                console.log(`\nDry-run complete. Re-run with --yes to delete the ${candidates.length} candidate(s).`);
-                return;
-              }
-
-              console.log(`\nDeleted (${result.deleted.length})`);
-              for (const p of result.deleted) console.log(`- ${p}`);
-
-              if ((result as any).deleteErrors?.length) {
-                console.log(`\nDelete errors (${(result as any).deleteErrors.length})`);
-                for (const e of (result as any).deleteErrors) console.log(`- ${e.path}: ${e.error}`);
-                process.exitCode = 1;
-              }
-            }),
-          );
       },
       { commands: ["recipes"] },
     );
