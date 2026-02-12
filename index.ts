@@ -9,6 +9,7 @@ import { renderTeamMd, renderTicketsMd } from "./src/lib/scaffold-templates";
 import { upsertBindingInConfig as upsertBindingInConfigCore } from "./src/lib/bindings";
 import { handoffTicket as handoffTicketCore } from "./src/lib/ticket-workflow";
 import { ensureLaneDir, RecipesCliError } from "./src/lib/lanes";
+import { findTicketFile as findTicketFileAnyLane, parseOwnerFromMd } from "./src/lib/ticket-finder";
 import {
   DEFAULT_ALLOWED_PREFIXES,
   DEFAULT_PROTECTED_TEAM_IDS,
@@ -1358,15 +1359,26 @@ const recipesPlugin = {
             const readTickets = async (dir: string, stage: "backlog" | "in-progress" | "testing" | "done") => {
               if (!(await fileExists(dir))) return [] as any[];
               const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".md")).sort();
-              return files.map((f) => {
-                const m = f.match(/^(\d{4})-(.+)\.md$/);
-                return {
-                  stage,
-                  number: m ? Number(m[1]) : null,
-                  id: m ? `${m[1]}-${m[2]}` : f.replace(/\.md$/, ""),
-                  file: path.join(dir, f),
-                };
-              });
+              return Promise.all(
+                files.map(async (f) => {
+                  const m = f.match(/^(\d{4})-(.+)\.md$/);
+                  const file = path.join(dir, f);
+                  let owner: string | null = null;
+                  try {
+                    const md = await fs.readFile(file, 'utf8');
+                    owner = parseOwnerFromMd(md);
+                  } catch {
+                    owner = null;
+                  }
+                  return {
+                    stage,
+                    number: m ? Number(m[1]) : null,
+                    id: m ? `${m[1]}-${m[2]}` : f.replace(/\.md$/, ""),
+                    owner,
+                    file,
+                  };
+                }),
+              );
             };
 
             const out = {
@@ -1527,36 +1539,13 @@ const recipesPlugin = {
               throw new Error("--owner must be one of: dev, devops, lead, test");
             }
 
-            const stageDir = (stage: string) => {
-              if (stage === 'backlog') return path.join(teamDir, 'work', 'backlog');
-              if (stage === 'in-progress') return path.join(teamDir, 'work', 'in-progress');
-              if (stage === 'done') return path.join(teamDir, 'work', 'done');
-              throw new Error(`Unknown stage: ${stage}`);
-            };
-            const searchDirs = [stageDir('backlog'), stageDir('in-progress'), stageDir('done')];
-
             const ticketArg = String(options.ticket);
-            const ticketNum = ticketArg.match(/^\d{4}$/) ? ticketArg : (ticketArg.match(/^(\d{4})-/)?.[1] ?? null);
-
-            const findTicketFile = async () => {
-              for (const dir of searchDirs) {
-                if (!(await fileExists(dir))) continue;
-                const files = await fs.readdir(dir);
-                for (const f of files) {
-                  if (!f.endsWith('.md')) continue;
-                  if (ticketNum && f.startsWith(`${ticketNum}-`)) return path.join(dir, f);
-                  if (!ticketNum && f.replace(/\.md$/, '') === ticketArg) return path.join(dir, f);
-                }
-              }
-              return null;
-            };
-
-            const ticketPath = await findTicketFile();
+            const ticketPath = await findTicketFileAnyLane({ teamDir, ticket: ticketArg });
             if (!ticketPath) throw new Error(`Ticket not found: ${ticketArg}`);
 
             const filename = path.basename(ticketPath);
             const m = filename.match(/^(\d{4})-(.+)\.md$/);
-            const ticketNumStr = m?.[1] ?? (ticketNum ?? '0000');
+            const ticketNumStr = m?.[1] ?? '0000';
             const slug = m?.[2] ?? (ticketArg.replace(/^\d{4}-?/, '') || 'ticket');
 
             const assignmentsDir = path.join(teamDir, 'work', 'assignments');
@@ -1685,31 +1674,8 @@ const recipesPlugin = {
               throw new Error("--owner must be one of: dev, devops, lead, test");
             }
 
-            const stageDir = (stage: string) => {
-              if (stage === 'backlog') return path.join(teamDir, 'work', 'backlog');
-              if (stage === 'in-progress') return path.join(teamDir, 'work', 'in-progress');
-              if (stage === 'done') return path.join(teamDir, 'work', 'done');
-              throw new Error(`Unknown stage: ${stage}`);
-            };
-            const searchDirs = [stageDir('backlog'), stageDir('in-progress'), stageDir('done')];
-
             const ticketArg = String(options.ticket);
-            const ticketNum = ticketArg.match(/^\d{4}$/) ? ticketArg : (ticketArg.match(/^(\d{4})-/)?.[1] ?? null);
-
-            const findTicketFile = async () => {
-              for (const dir of searchDirs) {
-                if (!(await fileExists(dir))) continue;
-                const files = await fs.readdir(dir);
-                for (const f of files) {
-                  if (!f.endsWith('.md')) continue;
-                  if (ticketNum && f.startsWith(`${ticketNum}-`)) return path.join(dir, f);
-                  if (!ticketNum && f.replace(/\.md$/, '') === ticketArg) return path.join(dir, f);
-                }
-              }
-              return null;
-            };
-
-            const srcPath = await findTicketFile();
+            const srcPath = await findTicketFileAnyLane({ teamDir, ticket: ticketArg });
             if (!srcPath) throw new Error(`Ticket not found: ${ticketArg}`);
 
             const destDir = stageDir('in-progress');
@@ -1760,7 +1726,7 @@ const recipesPlugin = {
             }
 
             const m = filename.match(/^(\d{4})-(.+)\.md$/);
-            const ticketNumStr = m?.[1] ?? (ticketNum ?? '0000');
+            const ticketNumStr = m?.[1] ?? '0000';
             const slug = m?.[2] ?? (ticketArg.replace(/^\d{4}-?/, '') || 'ticket');
             const assignmentsDir = path.join(teamDir, 'work', 'assignments');
             await ensureDir(assignmentsDir);
