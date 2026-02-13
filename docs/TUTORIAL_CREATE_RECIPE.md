@@ -80,7 +80,9 @@ templates:
     How you work:
     - Pick the lowest numbered ticket assigned to you.
     - Move it to `work/in-progress/`.
-    - Complete it and write a report in `work/done/`.
+    - Do the work.
+    - When ready for QA, move it to `work/testing/` and assign Owner to `test`.
+    - After QA passes, move it to `work/done/` and write a short completion report.
 
 files:
   - path: SOUL.md
@@ -110,9 +112,9 @@ openclaw recipes scaffold-team my-first-team --team-id my-first-team-team --appl
 ```
 
 You should now have:
-- `~/.openclaw/workspace/teams/my-first-team-team/`
-- `~/.openclaw/workspace/agents/my-first-team-team-lead/`
-- `~/.openclaw/workspace/agents/my-first-team-team-worker/`
+- `~/.openclaw/workspace-my-first-team-team/` (team shared workspace)
+- `~/.openclaw/workspace-my-first-team-team/roles/lead/`
+- `~/.openclaw/workspace-my-first-team-team/roles/worker/`
 
 ## Step 3 — dispatch a request
 ```bash
@@ -128,9 +130,16 @@ This will propose (or write, with `--yes`) three artifacts:
 - an assignment stub
 
 ## Step 4 — run the workflow
+Tickets move through lanes:
+- `work/backlog/` → `work/in-progress/` → `work/testing/` → `work/done/`
+
 - Move the ticket from `work/backlog/` → `work/in-progress/`
 - Do the work
-- Move the ticket to `work/done/` and add a `*.DONE.md` report
+- When ready for QA:
+  - Move the ticket to `work/testing/`
+  - Set `Owner: test` and add **Verification steps** to the ticket
+- After verification:
+  - Move the ticket to `work/done/` and add a short completion report
 
 ## Common mistakes
 - **Forgetting the `-team` suffix** on `--team-id` (required).

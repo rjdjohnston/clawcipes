@@ -34,7 +34,10 @@ When you scaffold a team:
 
 4) **Test**
 - Move ticket to `work/testing/`.
-- Optionally assign to a tester/lead for verification.
+- Assign `Owner: test` (or explicitly tag the tester role) and include clear “Verification steps” in the ticket.
+- Tester verifies and either:
+  - moves to `work/done/` (pass), or
+  - bounces back to `work/in-progress/` with a bug note (fail)
 
 5) **Complete**
 - Move ticket to `work/done/` (or use `complete`).

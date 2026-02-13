@@ -35,7 +35,7 @@ openclaw recipes list
 ### 3) Scaffold a team
 ```bash
 openclaw recipes scaffold-team development-team \
-  --team-id development-team \
+  --team-id development-team-team \
   --overwrite \
   --apply-config
 ```
@@ -43,7 +43,7 @@ openclaw recipes scaffold-team development-team \
 ### 4) Dispatch a request into work artifacts
 ```bash
 openclaw recipes dispatch \
-  --team-id development-team \
+  --team-id development-team-team \
   --request "Add a new recipe for a customer-support team" \
   --owner lead
 ```
@@ -68,6 +68,7 @@ The plugin supports these config keys (with defaults):
 - `workspaceTeamsDir` (default: `teams`)
 - `autoInstallMissingSkills` (default: `false`)
 - `confirmAutoInstall` (default: `true`)
+- `cronInstallation` (default: `prompt`; values: `off|prompt|on`)
 
 Config schema is defined in `openclaw.plugin.json`.
 

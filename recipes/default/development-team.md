@@ -384,6 +384,6 @@ tools:
 Scaffolds a shared team workspace and four namespaced agents (lead/dev/devops/test).
 
 ## What you get
-- Shared workspace at `~/.openclaw/workspace-development-team/`
+- Shared workspace at `~/.openclaw/workspace-<teamId>/` (e.g. `~/.openclaw/workspace-development-team-team/`)
 - File-first tickets: backlog → in-progress → testing → done
 - Team lead acts as dispatcher; tester verifies before done
