@@ -274,8 +274,30 @@ function spawnOpenClawJson(args: string[]) {
     (err as any).stderr = res.stderr;
     throw err;
   }
-  const out = String(res.stdout ?? "").trim();
-  return out ? (JSON.parse(out) as any) : null;
+
+  const raw = String(res.stdout ?? "");
+
+  // OpenClaw may prepend pretty "Config warnings" blocks before JSON output.
+  // To be resilient, parse the first JSON object/array found in stdout.
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const firstObj = trimmed.indexOf("{");
+  const firstArr = trimmed.indexOf("[");
+  const start =
+    firstObj === -1 ? firstArr : firstArr === -1 ? firstObj : Math.min(firstObj, firstArr);
+
+  const jsonText = start >= 0 ? trimmed.slice(start) : trimmed;
+
+  try {
+    return JSON.parse(jsonText) as any;
+  } catch (e) {
+    const err = new Error(`Failed parsing JSON from: openclaw ${args.join(" ")}`);
+    (err as any).stdout = raw;
+    (err as any).stderr = res.stderr;
+    (err as any).cause = e;
+    throw err;
+  }
 }
 
 function normalizeCronJobs(frontmatter: RecipeFrontmatter): CronJobSpec[] {
