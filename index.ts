@@ -1650,6 +1650,131 @@ const recipesPlugin = {
           });
 
         cmd
+          .command("handoff")
+          .description("QA handoff: move ticket to testing + assign to tester")
+          .requiredOption("--team-id <teamId>", "Team id")
+          .requiredOption("--ticket <ticket>", "Ticket id or number")
+          .option("--tester <owner>", "Tester owner (default: test)", "test")
+          .option("--overwrite", "Overwrite destination ticket file / assignment stub if they already exist")
+          .option("--yes", "Skip confirmation")
+          .action(async (options: any) => {
+            const workspaceRoot = api.config.agents?.defaults?.workspace;
+            if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
+            const teamId = String(options.teamId);
+            const teamDir = path.resolve(workspaceRoot, "..", `workspace-${teamId}`);
+
+            const tester = String(options.tester ?? "test");
+            if (!['dev','devops','lead','test'].includes(tester)) {
+              throw new Error("--tester must be one of: dev, devops, lead, test");
+            }
+
+            const stageDir = (stage: string) => {
+              if (stage === 'in-progress') return path.join(teamDir, 'work', 'in-progress');
+              if (stage === 'testing') return path.join(teamDir, 'work', 'testing');
+              throw new Error(`Unknown stage: ${stage}`);
+            };
+
+            const ticketArg = String(options.ticket);
+            const ticketNum = ticketArg.match(/^\d{4}$/) ? ticketArg : (ticketArg.match(/^(\d{4})-/)?.[1] ?? null);
+
+            const findTicketFile = async (dir: string) => {
+              if (!(await fileExists(dir))) return null;
+              const files = await fs.readdir(dir);
+              for (const f of files) {
+                if (!f.endsWith('.md')) continue;
+                if (ticketNum && f.startsWith(`${ticketNum}-`)) return path.join(dir, f);
+                if (!ticketNum && f.replace(/\.md$/, '') === ticketArg) return path.join(dir, f);
+              }
+              return null;
+            };
+
+            const inProgressDir = stageDir('in-progress');
+            const testingDir = stageDir('testing');
+            await ensureDir(testingDir);
+
+            const srcInProgress = await findTicketFile(inProgressDir);
+            const srcTesting = await findTicketFile(testingDir);
+
+            if (!srcInProgress && !srcTesting) {
+              throw new Error(`Ticket not found in in-progress/testing: ${ticketArg}`);
+            }
+            if (!srcInProgress && srcTesting) {
+              // already in testing (idempotent path)
+            }
+
+            const srcPath = srcInProgress ?? srcTesting!;
+            const filename = path.basename(srcPath);
+            const destPath = path.join(testingDir, filename);
+
+            const patch = (md: string) => {
+              let out = md;
+              if (out.match(/^Owner:\s.*$/m)) out = out.replace(/^Owner:\s.*$/m, `Owner: ${tester}`);
+              else out = out.replace(/^(# .+\n)/, `$1\nOwner: ${tester}\n`);
+
+              if (out.match(/^Status:\s.*$/m)) out = out.replace(/^Status:\s.*$/m, `Status: testing`);
+              else out = out.replace(/^(# .+\n)/, `$1\nStatus: testing\n`);
+
+              return out;
+            };
+
+            const plan = {
+              from: srcPath,
+              to: destPath,
+              tester,
+              note: srcTesting ? 'already-in-testing' : 'move-to-testing',
+            };
+
+            if (!options.yes && process.stdin.isTTY) {
+              console.log(JSON.stringify({ plan }, null, 2));
+              const readline = await import('node:readline/promises');
+              const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+              try {
+                const ans = await rl.question(`Move to testing + assign to ${tester}? (y/N) `);
+                const ok = ans.trim().toLowerCase() === 'y' || ans.trim().toLowerCase() === 'yes';
+                if (!ok) {
+                  console.error('Aborted; no changes made.');
+                  return;
+                }
+              } finally {
+                rl.close();
+              }
+            } else if (!options.yes && !process.stdin.isTTY) {
+              console.error('Refusing to handoff without confirmation in non-interactive mode. Re-run with --yes.');
+              process.exitCode = 2;
+              console.log(JSON.stringify({ ok: false, plan }, null, 2));
+              return;
+            }
+
+            if (srcInProgress && srcPath !== destPath) {
+              if (!options.overwrite && (await fileExists(destPath))) {
+                throw new Error(`Destination exists: ${destPath} (re-run with --overwrite to replace)`);
+              }
+            }
+
+            const md = await fs.readFile(srcPath, 'utf8');
+            const nextMd = patch(md);
+            await fs.writeFile(srcPath, nextMd, 'utf8');
+
+            if (srcInProgress && srcPath !== destPath) {
+              if (options.overwrite && (await fileExists(destPath))) {
+                await fs.rm(destPath);
+              }
+              await fs.rename(srcPath, destPath);
+            }
+
+            const m = filename.match(/^(\d{4})-(.+)\.md$/);
+            const ticketNumStr = m?.[1] ?? (ticketNum ?? '0000');
+            const slug = m?.[2] ?? (ticketArg.replace(/^\d{4}-?/, '') || 'ticket');
+            const assignmentsDir = path.join(teamDir, 'work', 'assignments');
+            await ensureDir(assignmentsDir);
+            const assignmentPath = path.join(assignmentsDir, `${ticketNumStr}-assigned-${tester}.md`);
+            const assignmentMd = `# Assignment — ${ticketNumStr}-${slug}\n\nAssigned: ${tester}\n\n## Ticket\n${path.relative(teamDir, destPath)}\n\n## Notes\n- Created by: openclaw recipes handoff\n`;
+            await writeFileSafely(assignmentPath, assignmentMd, options.overwrite ? 'overwrite' : 'createOnly');
+
+            console.log(JSON.stringify({ ok: true, plan, assignmentPath }, null, 2));
+          });
+
+        cmd
           .command("complete")
           .description("Complete a ticket (move to done, set Status: done, and add Completed: timestamp)")
           .requiredOption("--team-id <teamId>", "Team id")
