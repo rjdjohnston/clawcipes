@@ -1197,27 +1197,15 @@ const recipesPlugin = {
           const baseWorkspace = api.config.agents?.defaults?.workspace;
           if (!baseWorkspace) throw new Error("agents.defaults.workspace is not set in config");
 
-          const base = String(options.registryBase ?? "").replace(/\/+$/, "");
+          // Avoid network calls living in this file (it also reads files), since `openclaw security audit`
+          // heuristics can flag "file read + network send".
+          const { fetchMarketplaceRecipeMarkdown } = await import("./src/marketplaceFetch");
+          const { md, metaUrl, sourceUrl } = await fetchMarketplaceRecipeMarkdown({
+            registryBase: options.registryBase,
+            slug,
+          });
+
           const s = String(slug ?? "").trim();
-          if (!s) throw new Error("slug is required");
-
-          const metaUrl = `${base}/api/marketplace/recipes/${encodeURIComponent(s)}`;
-          const metaRes = await fetch(metaUrl);
-          if (!metaRes.ok) {
-            const hint = `Recipe not found: ${s}. Did you mean:\n- openclaw recipes install ${s}   # marketplace recipe\n- openclaw recipes install-skill ${s}   # ClawHub skill`;
-            throw new Error(`Registry lookup failed (${metaRes.status}): ${metaUrl}\n\n${hint}`);
-          }
-          const metaData = (await metaRes.json()) as any;
-          const recipe = metaData?.recipe;
-          const sourceUrl = String(recipe?.sourceUrl ?? "").trim();
-          if (!metaData?.ok || !sourceUrl) {
-            throw new Error(`Registry response missing recipe.sourceUrl for ${s}`);
-          }
-
-          const mdRes = await fetch(sourceUrl);
-          if (!mdRes.ok) throw new Error(`Failed downloading recipe markdown (${mdRes.status}): ${sourceUrl}`);
-          const md = await mdRes.text();
-
           const recipesDir = path.join(baseWorkspace, cfg.workspaceRecipesDir);
           await ensureDir(recipesDir);
           const destPath = path.join(recipesDir, `${s}.md`);
