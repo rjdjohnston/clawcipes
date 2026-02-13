@@ -1,12 +1,12 @@
-# Clawcipes (OpenClaw Recipes Plugin)
+# ClawRecipes (OpenClaw Recipes Plugin)
 
 <p align="center">
-  <img src="./clawcipes_cook.jpg" alt="Clawcipes logo" width="240" />
+  <img src="./clawrecipes_cook.jpg" alt="ClawRecipes logo" width="240" />
 </p>
 
-Clawcipes is an OpenClaw plugin that provides **CLI-first recipes** for scaffolding specialist agents and teams from Markdown.
+ClawRecipes is an OpenClaw plugin that provides **CLI-first recipes** for scaffolding specialist agents and teams from Markdown.
 
-If you like durable workflows: Clawcipes is built around a **file-first team workspace** (inbox/backlog/in-progress/testing/done) that plays nicely with git.
+If you like durable workflows: ClawRecipes is built around a **file-first team workspace** (inbox/backlog/in-progress/testing/done) that plays nicely with git.
 
 ## Quickstart
 ### 1) Install
@@ -14,15 +14,15 @@ If you like durable workflows: Clawcipes is built around a **file-first team wor
 Once published:
 
 ```bash
-openclaw plugins install @clawcipes/recipes
+openclaw plugins install @jiggai/clawrecipes
 openclaw gateway restart
 openclaw plugins list
 ```
 
 #### Option B: install from GitHub
 ```bash
-git clone https://github.com/rjdjohnston/clawcipes.git ~/clawcipes
-openclaw plugins install --link ~/clawcipes
+git clone https://github.com/JIGGAI/ClawRecipes.git ~/clawrecipes
+openclaw plugins install --link ~/clawrecipes
 openclaw gateway restart
 openclaw plugins list
 ```
@@ -98,9 +98,9 @@ Reference:
 - Recipe format: `docs/RECIPE_FORMAT.md`
 - Bundled recipes: `docs/BUNDLED_RECIPES.md`
 - Team workflow: `docs/TEAM_WORKFLOW.md`
-- Clawcipes Kitchen (UI): `docs/CLAWCIPES_KITCHEN.md`
+- ClawRecipes Kitchen (UI): `docs/CLAWCIPES_KITCHEN.md`
 
-(Also see: GitHub repo https://github.com/rjdjohnston/clawcipes)
+(Also see: GitHub repo https://github.com/JIGGAI/ClawRecipes)
 ## Notes / principles
 - Workspaces:
   - Standalone agents: `~/.openclaw/workspace-<agentId>/`
@@ -112,25 +112,21 @@ Reference:
 - Recipe template rendering is intentionally simple: `{{var}}` replacement only.
 
 ## Removing (uninstalling) a scaffolded team
-Clawcipes does not (yet) include a first-class `remove-team` command.
+ClawRecipes includes a safe uninstall command:
 
-To remove a scaffolded team created with `scaffold-team --apply-config`, do two things:
-
-1) Remove the team workspace (recommended: send to trash):
 ```bash
-trash ~/.openclaw/workspace-<teamId>
-```
-
-2) Remove the agents from OpenClaw config:
-- Edit `~/.openclaw/openclaw.json`
-- Delete the matching entries under `agents.list[]` whose `id` starts with `<teamId>-`
-- Restart:
-```bash
+openclaw recipes remove-team --team-id <teamId> --plan --json
+openclaw recipes remove-team --team-id <teamId> --yes
 openclaw gateway restart
 ```
 
+Notes:
+- The command is confirmation-gated by default (use `--yes` to apply).
+- Cron cleanup is conservative: it removes only cron jobs that are explicitly **stamped** with `recipes.teamId=<teamId>`.
+- If you need a manual fallback, you can still delete `~/.openclaw/workspace-<teamId>` and remove `<teamId>-*` agents from `agents.list[]` in `~/.openclaw/openclaw.json`.
+
 ## Links
-- GitHub: https://github.com/rjdjohnston/clawcipes
+- GitHub: https://github.com/JIGGAI/ClawRecipes
 - Docs:
   - Installation: `docs/INSTALLATION.md`
   - Commands: `docs/COMMANDS.md`
@@ -138,7 +134,7 @@ openclaw gateway restart
   - Team workflow: `docs/TEAM_WORKFLOW.md`
 
 ## What you should be developing (not this plugin)
-Clawcipes is meant to be *installed* and then used to build **agents + teams**.
+ClawRecipes is meant to be *installed* and then used to build **agents + teams**.
 
 Most users should focus on:
 - authoring recipes in their OpenClaw workspace (`<workspace>/recipes/*.md`)

@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import crypto from "node:crypto";
 import JSON5 from "json5";
 import YAML from "yaml";
+import { buildRemoveTeamPlan, executeRemoveTeamPlan, loadCronStore, saveCronStore } from "./src/lib/remove-team";
 
 type RecipesConfig = {
   workspaceRecipesDir?: string;
@@ -1354,6 +1355,82 @@ const recipesPlugin = {
 
             await doWrite();
             console.log(JSON.stringify({ ok: true, wrote: plan.files.map((f) => f.path) }, null, 2));
+          });
+
+        cmd
+          .command("remove-team")
+          .description("Safe uninstall: remove a scaffolded team workspace + agents + stamped cron jobs")
+          .requiredOption("--team-id <teamId>", "Team id")
+          .option("--plan", "Print plan and exit")
+          .option("--json", "Output JSON")
+          .option("--yes", "Skip confirmation (apply destructive changes)")
+          .option("--include-ambiguous", "Also remove cron jobs that only loosely match the team (dangerous)")
+          .action(async (options: any) => {
+            const teamId = String(options.teamId);
+
+            const workspaceRoot = api.config.agents?.defaults?.workspace;
+            if (!workspaceRoot) throw new Error("agents.defaults.workspace is not set in config");
+
+            const cronJobsPath = path.resolve(workspaceRoot, "..", "cron", "jobs.json");
+
+            const current = (api.runtime as any).config?.loadConfig?.();
+            if (!current) throw new Error("Failed to load config via api.runtime.config.loadConfig()");
+            const cfgObj = (current.cfg ?? current) as any;
+
+            const cronStore = await loadCronStore(cronJobsPath);
+
+            const plan = await buildRemoveTeamPlan({
+              teamId,
+              workspaceRoot,
+              openclawConfigPath: "(managed by api.runtime.config)",
+              cronJobsPath,
+              cfgObj,
+              cronStore,
+            });
+
+            const wantsJson = Boolean(options.json);
+
+            if (options.plan) {
+              console.log(JSON.stringify({ ok: true, plan }, null, 2));
+              return;
+            }
+
+            if (!options.yes && !process.stdin.isTTY) {
+              console.error("Refusing to prompt (non-interactive). Re-run with --yes or --plan.");
+              process.exitCode = 2;
+              console.log(JSON.stringify({ ok: false, plan }, null, 2));
+              return;
+            }
+
+            if (!options.yes && process.stdin.isTTY) {
+              console.log(JSON.stringify({ plan }, null, 2));
+              const ok = await promptYesNo(
+                `This will DELETE workspace-${teamId}, remove matching agents from openclaw config, and remove stamped cron jobs.`,
+              );
+              if (!ok) {
+                console.error("Aborted; no changes made.");
+                return;
+              }
+            }
+
+            const includeAmbiguous = Boolean(options.includeAmbiguous);
+
+            const result = await executeRemoveTeamPlan({
+              plan,
+              includeAmbiguous,
+              cfgObj,
+              cronStore,
+            });
+
+            await (api.runtime as any).config?.writeConfigFile?.(cfgObj);
+            await saveCronStore(cronJobsPath, cronStore);
+
+            if (wantsJson) {
+              console.log(JSON.stringify(result, null, 2));
+            } else {
+              console.log(JSON.stringify(result, null, 2));
+              console.error("Restart required: openclaw gateway restart");
+            }
           });
 
         cmd

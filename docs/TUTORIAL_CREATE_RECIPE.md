@@ -8,7 +8,7 @@ You’ll learn:
 - how templates/files are written
 - how to scaffold a team and run the file-first workflow
 
-## Step 0 — confirm Clawcipes is installed
+## Step 0 — confirm ClawRecipes is installed
 ```bash
 openclaw plugins list
 openclaw recipes list

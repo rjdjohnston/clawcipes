@@ -14,22 +14,22 @@ This repo is an **OpenClaw plugin** (not a standalone CLI). OpenClaw loads it an
 Once published, you can install directly via npm:
 
 ```bash
-openclaw plugins install @clawcipes/recipes
+openclaw plugins install @jiggai/clawrecipes
 openclaw gateway restart
 openclaw plugins list
 ```
 
 ### Option B: install from GitHub
 ```bash
-git clone https://github.com/rjdjohnston/clawcipes.git ~/clawcipes
-openclaw plugins install --link ~/clawcipes
+git clone https://github.com/JIGGAI/ClawRecipes.git ~/clawrecipes
+openclaw plugins install --link ~/clawrecipes
 openclaw gateway restart
 openclaw plugins list
 ```
 
 ### Option B: already cloned
 ```bash
-openclaw plugins install --link ~/clawcipes
+openclaw plugins install --link ~/clawrecipes
 openclaw gateway restart
 openclaw plugins list
 ```
@@ -49,7 +49,7 @@ openclaw recipes list
 If you pull a newer version from GitHub, restart the gateway so OpenClaw reloads the plugin:
 
 ```bash
-cd ~/clawcipes
+cd ~/clawrecipes
 git pull
 openclaw gateway restart
 ```

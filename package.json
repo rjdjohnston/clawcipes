@@ -1,7 +1,7 @@
 {
-  "name": "@clawcipes/recipes",
+  "name": "@jiggai/clawrecipes",
   "version": "0.2.7",
-  "description": "Clawcipes recipes plugin for OpenClaw (markdown recipes -> scaffold agents/teams)",
+  "description": "ClawRecipes plugin for OpenClaw (markdown recipes -> scaffold agents/teams)",
   "main": "index.ts",
   "type": "commonjs",
   "openclaw": {
@@ -29,7 +29,7 @@
   },
   "keywords": [
     "openclaw",
-    "clawcipes",
+    "clawrecipes",
     "plugin",
     "recipes"
   ],

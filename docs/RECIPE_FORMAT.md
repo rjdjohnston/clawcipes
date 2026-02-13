@@ -83,7 +83,7 @@ agents:
 For team recipes, file templates are namespaced by role:
 - `lead.soul`, `dev.soul`, etc.
 
-If a `files[].template` key does not contain a `.`, Clawcipes prefixes it with `<role>.`.
+If a `files[].template` key does not contain a `.`, ClawRecipes prefixes it with `<role>.`.
 
 ## Cron jobs (optional)
 Recipes can optionally declare cron jobs to be reconciled during `scaffold` / `scaffold-team`.

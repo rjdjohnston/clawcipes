@@ -1,6 +1,6 @@
-# Clawcipes Kitchen (UI)
+# ClawRecipes Kitchen (UI)
 
-Clawcipes Kitchen is our UI for managing Clawcipes workflows.
+ClawRecipes Kitchen is our UI for managing ClawRecipes workflows.
 
 ## What it’s for
 - Activity feed (high-level semantic events)
@@ -11,11 +11,11 @@ Clawcipes Kitchen is our UI for managing Clawcipes workflows.
 - Approvals inbox + routing (e.g., Telegram)
 
 ## Status
-Clawcipes Kitchen is under active development.
+ClawRecipes Kitchen is under active development.
 
 ## Relationship to the plugin
-- The **Clawcipes plugin** is CLI-first and works without any UI.
-- Clawcipes Kitchen is an optional UI companion for:
+- The **ClawRecipes plugin** is CLI-first and works without any UI.
+- ClawRecipes Kitchen is an optional UI companion for:
   - visibility (activity/search)
   - approvals
   - human review of plans and changes

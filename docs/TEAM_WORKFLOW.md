@@ -1,6 +1,6 @@
 # Team workflow (file-first)
 
-Clawcipes’ differentiator is the **shared team workspace** + a simple, durable, file-first workflow.
+ClawRecipes’ differentiator is the **shared team workspace** + a simple, durable, file-first workflow.
 
 ## Team workspace structure
 When you scaffold a team:

@@ -1,6 +1,6 @@
 # Bundled recipes
 
-Clawcipes ships with a few recipes in `recipes/default/`.
+ClawRecipes ships with a few recipes in `recipes/default/`.
 
 You can:
 - list them: `openclaw recipes list`

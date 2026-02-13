@@ -1,6 +1,6 @@
-# Agents and skills (OpenClaw + Clawcipes)
+# Agents and skills (OpenClaw + ClawRecipes)
 
-This doc explains the mental model: **what an agent is**, how **skills/tools** work, and how Clawcipes helps you build agents + teams.
+This doc explains the mental model: **what an agent is**, how **skills/tools** work, and how ClawRecipes helps you build agents + teams.
 
 ## What is an agent?
 In OpenClaw, an **agent** is a configured assistant persona with:
@@ -9,7 +9,7 @@ In OpenClaw, an **agent** is a configured assistant persona with:
 - a **tool policy** (what tools it is allowed to use)
 - a **model** configuration (defaults come from OpenClaw)
 
-In Clawcipes, a **standalone** agent recipe scaffolds a dedicated workspace like:
+In ClawRecipes, a **standalone** agent recipe scaffolds a dedicated workspace like:
 
 ```
 ~/.openclaw/workspace-<agentId>/
@@ -38,7 +38,7 @@ In OpenClaw, skills are surfaced as tools the agent can use.
 ## Tool policies (allow/deny)
 Every agent can have a tool policy in OpenClaw config (written via `--apply-config` when scaffolding).
 
-Clawcipes recipes commonly use:
+ClawRecipes recipes commonly use:
 - `allow: ["group:fs", "group:web"]` for safe file + web access
 - `allow: ["group:runtime"]` when the agent needs to run local commands
 - `allow: ["group:automation"]` for automation-oriented tools
@@ -84,7 +84,7 @@ openclaw gateway restart
 > Tip: if you later re-run scaffold with `--apply-config`, the recipe’s tool policy may overwrite your manual edits. If you want a change to stick, encode it in the recipe.
 
 ## Installing skills (workspace-local)
-Clawcipes favors **workspace-local** installs so each OpenClaw workspace is self-contained.
+ClawRecipes favors **workspace-local** installs so each OpenClaw workspace is self-contained.
 
 ### Install a skill slug
 ```bash
@@ -112,7 +112,7 @@ openclaw recipes install <recipe-id>
 That installs the recipe’s declared skills.
 
 ### Removing a skill
-Clawcipes currently does **not** implement a remove command.
+ClawRecipes currently does **not** implement a remove command.
 
 To remove a workspace-local skill:
 - delete the folder: `<workspace>/skills/<skill-slug>`
@@ -121,22 +121,17 @@ To remove a workspace-local skill:
 (We can add `openclaw recipes uninstall <slug>` later if you want it to be first-class.)
 
 ## Removing (uninstalling) a scaffolded team
-Clawcipes does not (yet) include a first-class `remove-team` command.
+ClawRecipes includes a safe uninstall command:
 
-If you scaffolded a team with `scaffold-team --apply-config`, removal has two parts:
-
-1) Remove the team workspace (recommended: send to trash):
 ```bash
-trash ~/.openclaw/workspace-<teamId>
-```
-
-2) Remove the agents from OpenClaw config:
-- Edit `~/.openclaw/openclaw.json`
-- Delete the matching entries under `agents.list[]` whose `id` starts with `<teamId>-`
-- Restart:
-```bash
+openclaw recipes remove-team --team-id <teamId> --plan --json
+openclaw recipes remove-team --team-id <teamId> --yes
 openclaw gateway restart
 ```
+
+Notes:
+- Cron cleanup is conservative: it removes only cron jobs explicitly stamped with `recipes.teamId=<teamId>`.
+- You can still do it manually by deleting `~/.openclaw/workspace-<teamId>` and removing `<teamId>-*` entries from `agents.list[]` in `~/.openclaw/openclaw.json`.
 
 ## Teams: shared workspace + multiple agents
 A **team** recipe scaffolds a **shared workspace root** plus role folders:
@@ -197,7 +192,7 @@ openclaw recipes scaffold-team <recipeId> --team-id <teamId> --overwrite
 ```
 
 ### 2) The agent’s OpenClaw config (tool permissions, identity, model)
-When you scaffold with `--apply-config`, Clawcipes writes the agent entry into OpenClaw config:
+When you scaffold with `--apply-config`, ClawRecipes writes the agent entry into OpenClaw config:
 - `~/.openclaw/openclaw.json` → `agents.list[]`
 
 Re-run scaffold/scaffold-team with `--apply-config` any time you want the recipe’s tool policy (allow/deny) to be re-applied.
