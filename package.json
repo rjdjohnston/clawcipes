@@ -1,6 +1,6 @@
 {
   "name": "@jiggai/recipes",
-  "version": "0.2.16",
+  "version": "0.2.17",
   "description": "ClawRecipes plugin for OpenClaw (markdown recipes -> scaffold agents/teams)",
   "main": "index.ts",
   "type": "commonjs",
