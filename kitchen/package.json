@@ -1,0 +1,38 @@
+{
+  "name": "clawrecipes-kitchen",
+  "version": "0.1.0",
+  "description": "ClawRecipes Kitchen - UI for managing ClawRecipes workflows",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "coverage:gaps": "npm run test:coverage && node scripts/coverage-gaps.js",
+    "start": "node server/index.js",
+    "prod": "npm run build && NODE_ENV=production node server/index.js",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:app\"",
+    "dev:server": "node --watch server/index.js",
+    "dev:app": "cd app && npm run dev",
+    "build": "cd app && npm run build",
+    "build:server": "node server/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "react-bootstrap": "^2.10.10",
+    "react-router-dom": "^7.13.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^5.1.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "concurrently": "^9.0.1",
+    "jsdom": "^28.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "supertest": "^7.0.0",
+    "vitest": "^3.2.4"
+  }
+}
