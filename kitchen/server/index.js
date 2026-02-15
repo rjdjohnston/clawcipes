@@ -24,7 +24,6 @@ import {
   addBinding,
   removeBinding,
   removeTeam,
-  migrateTeam,
 } from "./openclaw.js";
 import {
   getDemoTickets,
@@ -76,30 +75,6 @@ export function createApp() {
   } catch (err) {
     console.error("[kitchen] GET /api/teams:", err);
     res.status(500).json({ error: formatError(err) });
-  }
-});
-
-  app.post("/api/teams/:teamId/migrate", async (req, res) => {
-  const { teamId } = req.params;
-  if (guardInvalidTeamId(teamId, res)) return;
-  if (teamId === "demo-team") {
-    return res.status(400).json({ error: "Cannot migrate demo team" });
-  }
-  if (!teamId.endsWith("-team")) {
-    return res.status(400).json({ error: "teamId must end with -team" });
-  }
-  if (await guardOpenClaw(res)) return;
-  const { dryRun, mode, overwrite } = req.body || {};
-  try {
-    const result = migrateTeam(teamId, {
-      dryRun: !!dryRun,
-      mode: mode === "copy" ? "copy" : "move",
-      overwrite: !!overwrite,
-    });
-    res.json(result);
-  } catch (err) {
-    console.error("[kitchen] POST /api/teams/:teamId/migrate:", err);
-    res.status(400).json({ error: formatError(err) });
   }
 });
 

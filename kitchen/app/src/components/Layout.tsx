@@ -13,7 +13,6 @@ export function Layout() {
     if (location.pathname === "/board") document.title = `Board – ${base}`;
     else if (location.pathname === "/recipes") document.title = `Recipes – ${base}`;
     else if (location.pathname === "/bindings") document.title = `Bindings – ${base}`;
-    else if (location.pathname === "/settings") document.title = `Settings – ${base}`;
     else document.title = base;
   }, [location.pathname]);
 
@@ -36,9 +35,6 @@ export function Layout() {
               </Nav.Link>
               <Nav.Link as={NavLink} to="/bindings">
                 Bindings
-              </Nav.Link>
-              <Nav.Link as={NavLink} to="/settings">
-                Settings
               </Nav.Link>
             </Nav>
             <div className="d-flex align-items-center gap-2">

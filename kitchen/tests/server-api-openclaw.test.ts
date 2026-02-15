@@ -22,7 +22,6 @@ vi.mock('../server/openclaw.js', () => ({
   addBinding: vi.fn(),
   removeBinding: vi.fn(),
   removeTeam: vi.fn(),
-  migrateTeam: vi.fn(),
 }));
 
 import { createApp } from '../server/index.js';
@@ -254,7 +253,7 @@ describe('Bindings API', () => {
   });
 });
 
-describe('Teams API (remove, migrate)', () => {
+describe('Teams API (remove)', () => {
   beforeEach(() => {
     vi.mocked(openclaw.checkOpenClaw).mockResolvedValue(true);
   });
@@ -290,42 +289,6 @@ describe('Teams API (remove, migrate)', () => {
     expect(res.body).toHaveProperty('error');
   });
 
-  test('POST /api/teams/:teamId/migrate returns 200 with result', async () => {
-    vi.mocked(openclaw.migrateTeam).mockReturnValue({ ok: true, dryRun: true, plan: {} });
-
-    const res = await request(app)
-      .post('/api/teams/my-team-team/migrate')
-      .send({ dryRun: true, mode: 'move' })
-      .expect(200);
-    expect(res.body).toHaveProperty('ok', true);
-    expect(openclaw.migrateTeam).toHaveBeenCalledWith('my-team-team', {
-      dryRun: true,
-      mode: 'move',
-      overwrite: false,
-    });
-  });
-
-  test('POST /api/teams/demo-team/migrate returns 400', async () => {
-    const res = await request(app)
-      .post('/api/teams/demo-team/migrate')
-      .send({ dryRun: true })
-      .expect(400);
-    expect(res.body).toHaveProperty('error', 'Cannot migrate demo team');
-  });
-
-  test('POST /api/teams/:teamId/migrate uses copy mode when specified', async () => {
-    vi.mocked(openclaw.migrateTeam).mockReturnValue({ ok: true });
-
-    await request(app)
-      .post('/api/teams/my-team-team/migrate')
-      .send({ dryRun: false, mode: 'copy', overwrite: true })
-      .expect(200);
-    expect(openclaw.migrateTeam).toHaveBeenCalledWith('my-team-team', {
-      dryRun: false,
-      mode: 'copy',
-      overwrite: true,
-    });
-  });
 });
 
 describe('Non-demo team routes', () => {

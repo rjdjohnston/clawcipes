@@ -46,37 +46,6 @@ function getWorkspaceParent() {
 }
 
 /**
- * Migrate a legacy team scaffold to workspace-<teamId> layout.
- * @param {string} teamId - Team id (must end with -team)
- * @param {{ dryRun?: boolean; mode?: "move"|"copy"; overwrite?: boolean }} options
- * @returns {object} Plan (if dryRun) or result
- */
-export function migrateTeam(teamId, options = {}) {
-  if (!teamId || !/^[a-zA-Z0-9_-]+$/.test(teamId)) throw new Error("Invalid teamId");
-  if (!teamId.endsWith("-team")) throw new Error("teamId must end with -team");
-  const args = ["recipes", "migrate-team", "--team-id", teamId];
-  const mode = options.mode || "move";
-  if (mode !== "move" && mode !== "copy") throw new Error("mode must be move or copy");
-  args.push("--mode", mode);
-  if (options.dryRun) args.push("--dry-run");
-  if (options.overwrite) args.push("--overwrite");
-  const result = spawnSync("openclaw", args, {
-    encoding: "utf8",
-    timeout: SCAFFOLD_TIMEOUT,
-    env: CLI_ENV,
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(result.stderr || result.stdout || `openclaw exited with ${result.status}`);
-  }
-  try {
-    return JSON.parse(result.stdout || "{}");
-  } catch {
-    return { ok: true };
-  }
-}
-
-/**
  * Remove a scaffolded team (workspace, agents, cron jobs).
  * @param {string} teamId - Team id (must end with -team)
  */

@@ -4,8 +4,6 @@ import { Layout } from "./components/Layout";
 import { BoardPage } from "./pages/BoardPage";
 import { RecipesPage } from "./pages/RecipesPage";
 import { BindingsPage } from "./pages/BindingsPage";
-import { SettingsPage } from "./pages/SettingsPage";
-
 export default function App() {
   return (
     <DemoProvider>
@@ -16,7 +14,6 @@ export default function App() {
             <Route path="board" element={<BoardPage />} />
             <Route path="recipes" element={<RecipesPage />} />
             <Route path="bindings" element={<BindingsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/board" replace />} />
           </Route>
         </Routes>

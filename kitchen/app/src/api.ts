@@ -47,28 +47,6 @@ export async function removeTeam(teamId: string): Promise<void> {
   if (!res.ok) throw new Error(await parseApiError(res));
 }
 
-export type MigrateResult = {
-  ok?: boolean;
-  dryRun?: boolean;
-  plan?: object;
-  migrated?: string;
-  destTeamDir?: string;
-  agentIds?: string[];
-};
-
-export async function migrateTeam(
-  teamId: string,
-  options: { dryRun?: boolean; mode?: "move" | "copy"; overwrite?: boolean }
-): Promise<MigrateResult> {
-  const res = await fetch(`/api/teams/${encodeURIComponent(teamId)}/migrate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(options),
-  });
-  if (!res.ok) throw new Error(await parseApiError(res));
-  return res.json();
-}
-
 export async function fetchTickets(teamId: string): Promise<TicketsResponse> {
   const res = await fetch(`/api/teams/${encodeURIComponent(teamId)}/tickets`);
   if (!res.ok) throw new Error(await parseApiError(res));
