@@ -1,0 +1,339 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap");
+
+/* Custom theme - distinct teal accent */
+:root {
+  --bs-primary: #0d9488;
+  --bs-primary-rgb: 13, 148, 136;
+}
+
+[data-bs-theme="dark"] {
+  --bs-primary: #2dd4bf;
+  --bs-primary-rgb: 45, 212, 191;
+  /* Refined dark palette - cleaner, more depth */
+  --bs-body-bg: #0f1419;
+  --bs-body-color: #e6edf3;
+  --bs-secondary-bg: #161b22;
+  --bs-secondary-bg-rgb: 22, 27, 34;
+  --bs-tertiary-bg: #21262d;
+  --bs-tertiary-bg-rgb: 33, 38, 45;
+  --bs-border-color: #30363d;
+  --bs-border-color-translucent: rgba(48, 54, 61, 0.5);
+}
+
+body {
+  font-family: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Skip to main content - visible on focus for keyboard/screen reader users */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 8px;
+  padding: 8px 16px;
+  background: var(--bs-primary);
+  color: #fff;
+  text-decoration: none;
+  border-radius: var(--bs-border-radius);
+  z-index: 9999;
+  font-weight: 500;
+  transition: top 0.2s ease;
+}
+
+.skip-link:focus {
+  top: 8px;
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+}
+
+/* Reduced motion - respect user preference */
+@media (prefers-reduced-motion: reduce) {
+  .ticket-card-flash {
+    animation: none;
+  }
+
+  .ticket-card-clickable:hover {
+    transform: none;
+  }
+
+  .ticket-card-clickable {
+    transition: box-shadow 0.15s ease;
+  }
+
+  .skip-link {
+    transition: none;
+  }
+
+  .skeleton-placeholder,
+  .skeleton-text {
+    animation: none;
+  }
+}
+
+/* App-specific overrides and utilities */
+.team-select {
+  min-width: 200px;
+}
+
+.error-boundary-card {
+  max-width: 400px;
+}
+
+.kanban-column-card {
+  border-left-width: 4px !important;
+}
+
+/* Gentle flash when ticket data refreshes */
+@keyframes ticket-card-flash {
+  0% {
+    box-shadow: 0 0 0 1px rgba(var(--bs-primary-rgb), 0.25);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+.ticket-card-flash {
+  animation: ticket-card-flash 0.5s ease-out both;
+}
+
+/* Skeleton loading */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.skeleton-placeholder,
+.skeleton-text {
+  background: var(--bs-secondary-bg);
+  border-radius: var(--bs-border-radius);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-placeholder {
+  height: 48px;
+  margin-bottom: 8px;
+}
+
+.skeleton-placeholder.skeleton-short {
+  height: 32px;
+  width: 60%;
+}
+
+.skeleton-header {
+  height: 14px;
+  width: 80px;
+}
+
+/* Kanban empty state */
+.kanban-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  min-height: 80px;
+}
+
+.kanban-empty-icon {
+  width: 32px;
+  height: 32px;
+  opacity: 0.4;
+}
+
+/* No teams empty state */
+.teams-empty-icon {
+  width: 48px;
+  height: 48px;
+  opacity: 0.5;
+}
+
+/* Dark mode: Kanban cards with better elevation */
+[data-bs-theme="dark"] .kanban-column-card {
+  background-color: var(--bs-secondary-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-bs-theme="dark"] .kanban-column-card .card-header {
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+/* Dark mode: Ticket cards - clearer separation */
+[data-bs-theme="dark"] .ticket-card-clickable {
+  border-color: var(--bs-border-color);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+[data-bs-theme="dark"] .ticket-card-clickable:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Dark mode: Navbar - subtle elevation */
+[data-bs-theme="dark"] .navbar.bg-body-tertiary {
+  background-color: var(--bs-secondary-bg) !important;
+  border-bottom-color: var(--bs-border-color) !important;
+}
+
+/* Ticket card: allow 2-line wrap for long titles/IDs, break long words */
+.ticket-card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.ticket-card-clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ticket-card-clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+  background-color: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .ticket-card-clickable:hover {
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.ticket-card-clickable:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+}
+
+/* Ticket metadata block - structured key-value grid */
+.ticket-detail-metadata .text-break {
+  word-break: break-all;
+}
+
+/* Recipe YAML frontmatter - preserve formatting */
+.recipe-frontmatter {
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Markdown content in ticket and recipe detail */
+.ticket-detail-markdown,
+.recipe-detail-markdown {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.ticket-detail-markdown h1,
+.recipe-detail-markdown h1 {
+  font-size: 1.25em;
+  margin: 0 0 12px;
+}
+
+.ticket-detail-markdown h2,
+.recipe-detail-markdown h2 {
+  font-size: 1.1em;
+  margin: 16px 0 8px;
+}
+
+.ticket-detail-markdown h3,
+.recipe-detail-markdown h3 {
+  font-size: 1em;
+  margin: 12px 0 6px;
+}
+
+.ticket-detail-markdown p,
+.recipe-detail-markdown p {
+  margin: 0 0 8px;
+}
+
+.ticket-detail-markdown ul,
+.ticket-detail-markdown ol,
+.recipe-detail-markdown ul,
+.recipe-detail-markdown ol {
+  margin: 0 0 8px;
+  padding-left: 1.5em;
+}
+
+.ticket-detail-markdown pre,
+.recipe-detail-markdown pre {
+  padding: 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+  background: var(--bs-tertiary-bg);
+  border-radius: var(--bs-border-radius);
+}
+
+.ticket-detail-markdown code,
+.recipe-detail-markdown code {
+  padding: 2px 6px;
+  background: var(--bs-tertiary-bg);
+  border-radius: var(--bs-border-radius);
+  font-size: 13px;
+}
+
+/* Code block syntax highlighting - dark mode overrides */
+[data-bs-theme="dark"] .ticket-detail-markdown pre code.hljs,
+[data-bs-theme="dark"] .recipe-detail-markdown pre code.hljs {
+  background: var(--bs-tertiary-bg);
+  color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .ticket-detail-markdown .hljs,
+[data-bs-theme="dark"] .recipe-detail-markdown .hljs {
+  background: var(--bs-tertiary-bg) !important;
+}
+
+/* Dark mode: Modal and dropdown polish */
+[data-bs-theme="dark"] .modal-content {
+  background-color: var(--bs-secondary-bg);
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .dropdown-menu {
+  background-color: var(--bs-secondary-bg);
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .dropdown-item:hover,
+[data-bs-theme="dark"] .dropdown-item:focus {
+  background-color: var(--bs-tertiary-bg);
+}
+
+/* Dark mode: Form controls */
+[data-bs-theme="dark"] .form-select,
+[data-bs-theme="dark"] .form-control {
+  background-color: var(--bs-tertiary-bg);
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .form-select:focus,
+[data-bs-theme="dark"] .form-control:focus {
+  border-color: var(--bs-primary);
+  box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+/* Dark mode: Primary button - dark text on teal for contrast */
+[data-bs-theme="dark"] .btn-primary {
+  color: #0f1419;
+}
+
+/* Dark mode: Cards (e.g. No teams found) */
+[data-bs-theme="dark"] .card {
+  background-color: var(--bs-secondary-bg);
+  border-color: var(--bs-border-color);
+}
+
+/* Dark mode: Alerts */
+[data-bs-theme="dark"] .alert-danger {
+  background-color: rgba(248, 81, 73, 0.15);
+  border-color: rgba(248, 81, 73, 0.3);
+  color: #f85149;
+}
+
+/* Dark mode: Badge - demo indicator */
+[data-bs-theme="dark"] .badge.bg-success {
+  background-color: rgba(46, 160, 67, 0.4) !important;
+  color: #3fb950;
+}

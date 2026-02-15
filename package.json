@@ -5,9 +5,7 @@
   "main": "index.ts",
   "type": "commonjs",
   "openclaw": {
-    "extensions": [
-      "./index.ts"
-    ]
+    "extensions": ["./index.ts"]
   },
   "publishConfig": {
     "access": "public"
@@ -23,10 +21,14 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:all": "npm run test && npm run test:kitchen",
+    "test:kitchen": "cd kitchen && npm run test",
     "test:smoke": "node scripts/scaffold-smoke.mjs",
     "test:provenance-smoke": "node scripts/scaffold-team-provenance-smoke.mjs",
     "smoke": "node scripts/scaffold-smoke.mjs",
-    "scaffold:smoke": "node scripts/scaffold-smoke.mjs"
+    "scaffold:smoke": "node scripts/scaffold-smoke.mjs",
+    "kitchen": "cd kitchen && npm run dev",
+    "kitchen:prod": "cd kitchen && npm run prod"
   },
   "keywords": [
     "openclaw",

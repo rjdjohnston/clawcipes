@@ -1,5 +1,8 @@
 node_modules/
 .clawhub/
+kitchen/demo-data/
+kitchen/coverage/
+kitchen/app/dist/
 .DS_Store
 npm-debug.log*
 .env
